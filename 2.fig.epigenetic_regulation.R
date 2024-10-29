@@ -2,7 +2,8 @@ source('0.basics.R')
 
 # Expression information
 expTable.master <- read.delim('RNA/All_EPICC_tpm.txt')
-
+vst.deseq <- readRDS('RNA/allgenes.vsd.ensembl_withC516adenoma.rds')
+geneexp <- as.data.frame(assay(vst.deseq))
 
 # SCAA of APGs ------------------------------------------------------------
 
@@ -43,21 +44,26 @@ table(prop>(apg.scaa.count[1]/(apg.scaa.count[1]+apg.scaa.count[2])))
 apg <- read.delim('Immune_escape/APG_list.txt')
 apg.cna.df <- read.delim('Immune_escape/EPICC_APG_CN_master_file.txt')
 apg.scaa.df <- read.delim('Immune_escape/EPICC_APG_SCAA_master_file.txt')
-expTable.apg <- expTable.master[expTable.master$GeneID %in% apg$EnsID[apg$Use],]
+#expTable.apg <- expTable.master[expTable.master$GeneID %in% apg$EnsID[apg$Use],]
+expTable.apg <- geneexp[apg$EnsID[apg$Use],]
 
 # get mean of all normal samples
 normTable.m <- as.data.frame(matrix(vector(),ncol=4))
 norm <- rna.df$Sample[rna.df$Tissue=='Normal']
 apg.norm <- rowMeans(expTable.apg[,norm,drop=F])
-names(apg.norm) <- expTable.apg$GeneID
+#names(apg.norm) <- expTable.apg$GeneID
 # for each patient get genes with SCAA and then compute normalised expression compared to all normals
 for (pat in intersect(apg.scaa.df$Sample, rna.df$Patient)){
   scaa.genes <- names(apg.scaa.df)[apg.scaa.df[apg.scaa.df$Sample==pat,]!=0]
   scaa.geneid <- apg$EnsID[apg$GeneName %in% scaa.genes]
   if (length(scaa.geneid)==0){next}
-  apg.tmp <- expTable.apg[expTable.apg$GeneID %in% scaa.geneid,rna.df$Sample[rna.df$Patient==pat & rna.df$Tissue!='Normal']]
-  apg.tmp <- apg.tmp/apg.norm[expTable.apg$GeneID[expTable.apg$GeneID %in% scaa.geneid]]
-  apg.tmp$GeneID <- expTable.apg$GeneID[expTable.apg$GeneID %in% scaa.geneid]
+  samps <- rna.df$Sample[rna.df$Patient==pat & rna.df$Tissue!='Normal']; samps <- intersect(samps, names(geneexp))
+  #apg.tmp <- expTable.apg[expTable.apg$GeneID %in% scaa.geneid,samps]
+  #apg.tmp <- apg.tmp/apg.norm[expTable.apg$GeneID[expTable.apg$GeneID %in% scaa.geneid]]
+  #apg.tmp$GeneID <- expTable.apg$GeneID[expTable.apg$GeneID %in% scaa.geneid]
+  apg.tmp <- expTable.apg[scaa.geneid, samps]
+  apg.tmp <- apg.tmp/apg.norm[scaa.geneid]
+  apg.tmp$GeneID <- scaa.geneid
   apg.tmp$GeneName <- apg$GeneName[match(apg.tmp$GeneID, apg$EnsID)]
   apg.tmp.m <- reshape2::melt(apg.tmp, id=c('GeneID','GeneName'))
   normTable.m <- rbind(normTable.m, apg.tmp.m)
@@ -71,15 +77,25 @@ normTable.m$CN <- sapply(1:nrow(normTable.m), function(i) ifelse(as.character(no
 normTable.m$Patient <- rna.df$Patient[match(normTable.m$variable,rna.df$Sample)]
 normTable.m$variable <- sapply(as.character(normTable.m$variable), function(z) substr(z, 6,nchar(z)))
 normTable.sub <- subset(normTable.m, !is.na(CN)) #exclude samples/genes with NA CN
-ggplot(normTable.sub, aes(x=variable, y=GeneName, fill=log2(value+1))) + 
+# ggplot(normTable.sub, aes(x=variable, y=GeneName, fill=log2(value+1))) + 
+#   geom_tile() + theme_mypub() +
+#   scale_fill_gradientn(colours=c('#2166ac','#67a9cf','white','firebrick'), values=c(0,0.5/5, 1/5, 1),
+#                        limits=c(0, 5), na.value='grey70', breaks=c(0,1,2,3,4), labels=c(0, 1, 2, 4,8)) +
+#   theme(axis.text.x = element_text(angle=90, hjust=0.5, size=10), axis.text.y=element_text(size=10)) +
+#   theme(strip.background = element_blank(), axis.title=element_blank()) +
+#   # geom_point(aes(shape=as.factor(CN))) + #uncomment to include an additional marker to indicate CN loss/neutral/gain
+#   scale_shape_manual(values=setNames(c(15,18,NA,NA,NA,NA,NA),c(1,2,3,4,5,6,NA))) +
+#   facet_wrap(.~Patient, scales='free') + labs(fill='Normalised\nexpression')
+
+ggplot(na.omit(normTable.sub), aes(x=variable, y=GeneName, fill=log2(value))) + 
   geom_tile() + theme_mypub() +
-  scale_fill_gradientn(colours=c('#2166ac','#67a9cf','white','firebrick'), values=c(0,0.5/5, 1/5, 1),
-                       limits=c(0, 5), na.value='grey70', breaks=c(0,1,2,3,4), labels=c(0, 1, 2, 4,8)) +
+  scale_fill_gradientn(colours=c('#2166ac','#67a9cf','white','firebrick'), values=c(0,0.4,0.5, 1),
+                       limits=c(log2(0.5), log2(2)), na.value='grey70') +
   theme(axis.text.x = element_text(angle=90, hjust=0.5, size=10), axis.text.y=element_text(size=10)) +
   theme(strip.background = element_blank(), axis.title=element_blank()) +
   # geom_point(aes(shape=as.factor(CN))) + #uncomment to include an additional marker to indicate CN loss/neutral/gain
   scale_shape_manual(values=setNames(c(15,18,NA,NA,NA,NA,NA),c(1,2,3,4,5,6,NA))) +
-  facet_wrap(.~Patient, scales='free') + labs(fill='Normalised\nexpression')
+  facet_wrap(.~Patient, scales='free') + labs(fill='Normalised\nexpression\n(log2)')
 
 
 # Plot expresion for SCAAloss vs wild-type tumour regions
@@ -92,18 +108,20 @@ gene.df <- epicc.df[epicc.df$MatchRNA=='Yes',c('Sample','Patient','Region','Type
 gene.df$SCAA <- (gene.df$Patient %in% gene.scaa.regions)
 gene.df$CN2 <- gene.df$Sample %in% gene.cn.regions
 gene.df$Purity <- epicc.df$Purity[match(gene.df$Sample, epicc.df$Sample)]
-gene.df$Exp <- as.numeric(expTable.master[expTable.master$GeneID==ensid,gene.df$Sample])
+#gene.df$Exp <- as.numeric(expTable.master[expTable.master$GeneID==ensid,gene.df$Sample])
+gene.df <- subset(gene.df, Sample %in% names(geneexp))
+gene.df$Exp <- as.numeric(geneexp[ensid,gene.df$Sample])
 
-ggplot(gene.df, aes(x=paste0(SCAA), y=Exp+1)) +
+ggplot(gene.df, aes(x=paste0(SCAA), y=Exp)) +
   geom_boxplot(outlier.shape = NA) + 
   theme_mypub() +
   geom_jitter(height=0, width=0.2, aes(colour=Type, shape=Type)) +
   stat_compare_means(comparisons=list(c('FALSE','TRUE'))) +
   scale_x_discrete(labels=c('wild-type','SCAA loss')) +
-  labs(x=gene,y=paste0(gene,' expression (TPM)')) +
+  labs(x=gene,y=paste0(gene,' expression (VST)')) +
   scale_colour_manual(values=c('darkblue','skyblue'),labels=c('deep WGS','low-pass WGS')) +
   scale_shape_discrete(labels=c('deep WGS','low-pass WGS')) +
-  scale_y_log10(breaks=c(1,2,11,101), labels=c(0,1,10,100)) #+ facet_wrap(.~CN2) #uncomment to test neutral/non-neutral CN separately
+  scale_y_log10(breaks=c(6, 10, 16)) #+ facet_wrap(.~CN2) #uncomment to test neutral/non-neutral CN separately
 
 
 
@@ -162,7 +180,7 @@ atac.muts.total <- read.delim('ATAC/PromoterAccessSomaticForOR_NA_nonNA_allcance
 atac.muts.total <- subset(atac.muts.total, (numAccMut + numNotAccMut)>1 & MutType==muttype)
 
 # go through all, clonal and subclonal mutations and compute a Fisher test
-# the column numNotAccMut is the number of biopsies within a cancer with that mutation being somaticly non-accessible
+# the column numNotAccMut is the number of biopsies within a cancer with that mutation being somatically non-accessible
 atac.muts.sub <- subset(atac.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(Category %in% c('adenoma_only','private_adenoma')))
 f.all <- fisher.test(atac.muts.sub$Neoantigen %in% neoIdentifier, atac.muts.sub$numNotAccMut>0)
 atac.muts.sub <- subset(atac.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('truncal','truncal_full'))
@@ -188,6 +206,26 @@ ggplot(f.df) +
   scale_x_continuous(breaks=c(1,2,3), labels=f.df$Mutation) + theme(axis.title.x = element_blank())
 
 
+# repeat the same for MMRp/d cancers only
+atac.muts.sub <- subset(atac.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(Category %in% c('adenoma_only','private_adenoma')))
+chisq.test(paste0(atac.muts.sub$Neoantigen %in% neoIdentifier,atac.muts.sub$numNotAccMut>0), atac.muts.sub$Patient %in% msiList) # test MMRd/p proportions
+atac.muts.sub <- subset(atac.muts.sub, (Patient %in% msiList)) #in msiList for MMRd, ! in msiList for MMRd
+f.all.sub <- fisher.test(atac.muts.sub$Neoantigen %in% neoIdentifier, atac.muts.sub$numNotAccMut>0)
+atac.muts.sub <- subset(atac.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('truncal','truncal_full'))
+chisq.test(paste0(atac.muts.sub$Neoantigen %in% neoIdentifier,atac.muts.sub$numNotAccMut>0), atac.muts.sub$Patient %in% msiList) # test MMRd/p proportions
+atac.muts.sub <- subset(atac.muts.sub, (Patient %in% msiList))
+f.cl.sub <- fisher.test(atac.muts.sub$Neoantigen %in% neoIdentifier, atac.muts.sub$numNotAccMut>0)
+atac.muts.sub <- subset(atac.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('private','regional','shared_subclonal','other'))
+chisq.test(paste0(atac.muts.sub$Neoantigen %in% neoIdentifier,atac.muts.sub$numNotAccMut>0), atac.muts.sub$Patient %in% msiList) # test MMRd/p proportions
+atac.muts.sub <- subset(atac.muts.sub, (Patient %in% msiList))
+f.sc.sub <- fisher.test(atac.muts.sub$Neoantigen %in% neoIdentifier,atac.muts.sub$numNotAccMut>0)
+
+f.df.sub <- data.frame(Mutation=c('All','Clonal','Subclonal'), OR=c(f.all.sub$estimate,f.cl.sub$estimate, f.sc.sub$estimate),
+                   Conf_low=c(f.all.sub$conf.int[1],f.cl.sub$conf.int[1],f.sc.sub$conf.int[1]), Conf_high=c(f.all.sub$conf.int[2],f.cl.sub$conf.int[2],f.sc.sub$conf.int[2]),
+                   P=c(f.all.sub$p.value,f.cl.sub$p.value, f.sc.sub$p.value))
+f.df.sub
+
+
 
 # Proportion of SCAAloss/Neo co-occurrence --------------------------------
 muttype <- 'SNV'
@@ -203,6 +241,7 @@ scaa.muts.total$SCAALoss <- 1*(scaa.muts.total$SLossProm>0)
 atac.muts.sub <- subset(scaa.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)))
 notexp.pat <- aggregate(atac.muts.sub$SCAALoss, by=list(atac.muts.sub$Patient, atac.muts.sub$Neoantigen %in% neoIdentifier), mean)
 notexp.pat$Escape <- patientEsc.df$Escape[match(notexp.pat$Group.1, patientEsc.df$Patient)]
+notexp.pat$MSI <- ifelse(notexp.pat$Group.1 %in% msiList, 'MMRd','MMRp')
 # exclude patients (if any) where there is only a proportion value for Neo or Non-Neo; plot with log-scale
 pat.count <- table(notexp.pat$Group.1)
 ggplot(notexp.pat[!(notexp.pat$Group.1 %in% (names(pat.count)[pat.count<2])),], aes(x=Group.2, y=log10(x+0.01)+2, colour=Escape)) +
@@ -212,10 +251,10 @@ ggplot(notexp.pat[!(notexp.pat$Group.1 %in% (names(pat.count)[pat.count<2])),], 
   scale_x_discrete(expand=c(0.1,0.1), labels=c('Non-Neo','SB Neo')) +
   scale_y_continuous(breaks=c(0, 0.544,1.0414), labels=c('0%','2.5%','10%')) +
   stat_compare_means(paired=T, comparisons=list(c('TRUE','FALSE'))) +
-  labs(y='Proportion of mutations\nwith SCAAloss')
+  labs(y='Proportion of mutations\nwith SCAAloss') #+ facet_wrap(.~MSI)
 
 # Compute and plot the number of SCAAlosses that are preceding a neoantigen/non-neoantigen (for each cancer)
-scaa.muts.total <- read.delim('EPICC/ATAC/SCAALoss_mutsPerSCAA_allcancers.txt')
+scaa.muts.total <- read.delim('ATAC/SCAALoss_mutsPerSCAA_allcancers.txt')
 scaa.muts.total <- subset(scaa.muts.total, !is.na(Neoantigen) & !(Category %in% c('adenoma_only','private_adenoma')) )
 
 # denote neoantigen SCAAloss with binary 1/0, filter out other mutations
@@ -223,6 +262,7 @@ scaa.muts.total$InNA <- 1*(scaa.muts.total$Neoantigen!='Non-Neo' )
 atac.muts.sub <- subset(scaa.muts.total, (Neoantigen!=''))
 loss.pat <- as.data.frame(table(atac.muts.sub$Patient, atac.muts.sub$InNA))
 loss.pat$Escape <-patientEsc.df$Escape[match(loss.pat$Var1, patientEsc.df$Patient)]
+loss.pat$MSI <- ifelse(loss.pat$Var1 %in% msiList, 'MMRd','MMRp')
 ggplot(loss.pat, aes(x=Var2, y=log10(Freq+0.1)+1, colour=Escape)) +
   geom_point(size=2) + geom_line(aes(group=Var1), alpha=0.5, size=1.2) +
   theme_mypub() + theme(axis.title.x=element_blank()) +
@@ -230,6 +270,6 @@ ggplot(loss.pat, aes(x=Var2, y=log10(Freq+0.1)+1, colour=Escape)) +
   scale_x_discrete(expand=c(0.1,0.1), labels=c('Before Non-Neo','Before Neo')) +
   scale_y_continuous(breaks=c(0, 1.0414, 1.70757, 2.6031) , labels=c(0, 1, 5, 40))+
   stat_compare_means(paired=T, comparisons=list(c('0','1'))) +
-  labs(y='Number of promoter SCAAloss')
+  labs(y='Number of promoter SCAAloss') #+ facet_wrap(.~MSI)
 
 

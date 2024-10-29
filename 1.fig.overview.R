@@ -5,11 +5,25 @@ source('0.basics.R')
 
 burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
 
-apg.df <- read.delim('Immune_escape/EPICC_APGMUT_master_file.txt')
-apg.df <- apg.df[,1:34]; apg.df <- apg.df[,c(T,colSums(apg.df[,-1])>0)]
+apg.df <- read.delim('Immune_escape/EPICC_APG_MUT_master_file.txt')
+apg.df <- apg.df[,1:34]
+apg.scaa.df <- read.delim('Immune_escape/EPICC_APG_SCAA_master_file.perBiopsy.txt')
+apg.scaa.df[,-1] <- 2*as.numeric(apg.scaa.df[,-1]<0)
+apg.df$TAP2 <- 0 # add tap2 to fill out to full list
+apg.scaa.df <- apg.scaa.df[match(apg.df$Sample, apg.scaa.df$Sample), names(apg.df)[-1]]
+apg.scaa.df[is.na(apg.scaa.df)] <- 0
+apg.df[,-1] <- apg.df[,-1] + apg.scaa.df
+apg.df <- apg.df[,c(T,colSums(apg.df[,-1])>0)]
 apg.df <- apg.df[,c(1,1+order(colSums(apg.df[,-1]),decreasing=T))]
 
-xPat.df <- data.frame(Patient=unique(burden.df$Patient), PosShift=3*(0:28))
+# reorder patients as MSI-MSS and high-low proportional burden
+burden.cancer <- subset(burden.df, Tissue=='Cancer')
+xPat.df <- aggregate(burden.cancer$PropBurden, by=list(burden.cancer$Patient, burden.cancer$MSI), mean); names(xPat.df)[1:2] <- c('Patient','MSI')
+xPat.df <- xPat.df[order(xPat.df$MSI, (-xPat.df$x)),]
+xPat.df$PosShift <- 3*(0:28)
+
+#xPat.df <- data.frame(Patient=unique(burden.df$Patient), PosShift=3*(0:28))
+burden.df <- burden.df[order( xPat.df$PosShift[match(burden.df$Patient, xPat.df$Patient)] ),]
 burden.df$Pos <- 1:nrow(burden.df); burden.df$Pos <- burden.df$Pos + xPat.df$PosShift[match(burden.df$Patient, xPat.df$Patient)]
 
 apg.df <- apg.df[match(burden.df$Sample,apg.df$Sample),]
@@ -20,9 +34,9 @@ burden.df$imm_highci[burden.df$imm_highci==Inf] <- NA
 burden.df$imm_highci[burden.df$imm_highci>3.5] <- 3.5
 
 # Colour code for immune escape and sample type categories
-totalCols <- setNames(c('grey60','goldenrod','goldenrod','brown', '#baba9e','#6d6d4e', '#bc432d','#568b7e','darkblue','skyblue', 'tan4',
+totalCols <- setNames(c('grey60','goldenrod','goldenrod','brown', '#baba9e','#6d6d4e', '#bc432d','#568b7e','darkblue','skyblue', 'tan4','skyblue3',
                         'deepskyblue4','deepskyblue4','grey80', '#d582a0','#b63d4d','#894487','grey80','grey80'),
-                      c('No','Weak','Partial','Yes','Adenoma','Cancer', 'MSI','MSS','Deep','LP','1',
+                      c('No','Weak','Partial','Yes','Adenoma','Cancer', 'MSI','MSS','Deep','LP','1','2',
                         'weak_evidence_LOH','LOH','AI','weak_evidence_mut','HLA_snv','HLA_fs','FALSE','0'))
 
 # Panel for burdens and categorical variables
@@ -38,21 +52,32 @@ ggplot(burden.df) + theme_mypub() +
   geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-2.5, ymax=-1.5, fill=HLAsnv)) +
   geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-3.5, ymax=-2.5, fill=HLAfs)) +
   geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-4.5, ymax=-3.5, fill=HLAloh)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-6, ymax=-5.5, fill=B2M)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-6.5, ymax=-6, fill=ERAP2)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-7, ymax=-6.5, fill=CIITA)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-7.5, ymax=-7, fill=TBK1)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-8, ymax=-7.5, fill=NLRC5)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-8.5, ymax=-8, fill=RFXAP)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-9, ymax=-8.5, fill=HSPA2)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-9.5, ymax=-9, fill=HSPA5)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-10, ymax=-9.5, fill=ERAP1)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-10.5, ymax=-10, fill=PSME2)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-11, ymax=-10.5, fill=HLA.A)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-11.5, ymax=-11, fill=NFYB)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-12, ymax=-11.5, fill=RFX5)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-14, ymax=-13, fill=Escape)) +
-  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-15, ymax=-14, fill=PatEscape)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-5.8, ymax=-5.5, fill=B2M)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-6.1, ymax=-5.8, fill=CALR)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-6.4, ymax=-6.1, fill=CIITA)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-6.7, ymax=-6.4, fill=CREB1)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-7, ymax=-6.7, fill=ERAP1)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-7.3, ymax=-7, fill=ERAP2)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-7.6, ymax=-7.3, fill=TBK1)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-7.9, ymax=-7.6, fill=NLRC5)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-8.2, ymax=-7.9, fill=HSP90AA1)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-8.5, ymax=-8.2, fill=HSPA2)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-8.8, ymax=-8.5, fill=HSPA4)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-9.1, ymax=-8.8, fill=HSPA5)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-9.4, ymax=-9.1, fill=HSPA6)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-9.7, ymax=-9.4, fill=PSMA7)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-10, ymax=-9.7, fill=PSME2)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-10.3, ymax=-10, fill=NFYA)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-10.6, ymax=-10.3, fill=NFYB)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-10.9, ymax=-10.6, fill=NFYC)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-11.2, ymax=-10.9, fill=RFX5)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-11.5, ymax=-11.2, fill=RFXAP)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-11.8, ymax=-11.5, fill=RFXANK)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-12.1, ymax=-11.8, fill=TAP2)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-12.4, ymax=-12.1, fill=TAPBP)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-12.7, ymax=-12.4, fill=TBK1)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-14.5, ymax=-13.5, fill=Escape)) +
+  geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-15.5, ymax=-14.5, fill=PatEscape)) +
   #geom_hline(yintercept = c(0,5, 9,8)) +
   geom_hline(yintercept = c(0,4,6,11,(9+sh),(8+sh),(11+sh))) +
   scale_y_continuous(expand=c(0,0)) + scale_x_continuous(expand=c(0,0)) +
@@ -62,9 +87,9 @@ ggplot(burden.df) + theme_mypub() +
 ggplot(burden.df) + theme_mypub() +
   geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=0, ymax=1, fill=PDL1)) +
   geom_rect(aes(xmin=Pos-0.5, xmax=Pos+0.5,ymin=-1, ymax=0, fill=CTLA4)) +
-  scale_fill_gradient(low='papayawhip',high='darkred',na.value='grey80' ,limits=c(0,1.4)) +
+  scale_fill_gradient(low='papayawhip',high='darkred',na.value='grey80' ,limits=c(0,2.431)) +
   scale_y_continuous(expand=c(0,0)) + scale_x_continuous(expand=c(0,0)) +
-  theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.position = 'top') +
   labs(fill='IC expr.')
 
 
@@ -79,11 +104,18 @@ ip.inf.plot <- ip.inf.df[match(ip.burden.df$Sample, ip.inf.df$roi),c(paste0('per
                                                                                               'VISTAplus','CD163plus','CD68plus', 'Stromal_cells')),
                                                                      'fraction.PDL1plus_epithelial_cells')]
 ip.burden.df <- cbind(ip.burden.df, ip.inf.plot)
-
+ip.burden.df$SampleType <- factor(ip.burden.df$SampleType, levels=c('normal','superficial','invasive','node'))
 ip.burden.df <- ip.burden.df[order(ip.burden.df$PatientEPICC, ip.burden.df$SampleType),]
+
+# reorder patients as high-low proportional burden
+xPat.df <- aggregate(ip.burden.df$PropBurden, by=list(ip.burden.df$PatientEPICC), function(x) mean(x, na.rm=T)); names(xPat.df) <- c('PatientEPICC','x')
+xPat.df <- xPat.df[order(xPat.df$x, decreasing = T),]
+xPat.df$PosShift <- 3*(0:10)
+
+ip.burden.df <- ip.burden.df[order( xPat.df$PosShift[match(ip.burden.df$PatientEPICC, xPat.df$PatientEPICC) ]),]
 ip.burden.df$imm_highci[ip.burden.df$imm_highci>3.5] <- 3.5
 
-xPat.df <- data.frame(Patient=unique(ip.burden.df$PatientEPICC), PosShift=3*(0:10))
+#xPat.df <- data.frame(Patient=unique(ip.burden.df$PatientEPICC), PosShift=3*(0:10))
 ip.burden.df$Pos <- 1:nrow(ip.burden.df); ip.burden.df$Pos <- ip.burden.df$Pos + xPat.df$PosShift[match(ip.burden.df$PatientEPICC, xPat.df$Patient)]
 
 # Plot burdens and infiltration (continouous fill scale)

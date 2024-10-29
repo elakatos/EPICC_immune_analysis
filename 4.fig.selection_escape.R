@@ -5,33 +5,41 @@ source('0.basics.R')
 # APG mutation and expression ---------------------------------------------
 
 expTable.master <- read.delim('RNA/All_EPICC_tpm.txt')
+vst.deseq <- readRDS('RNA/allgenes.vsd.ensembl_withC516adenoma.rds')
+geneexp <- as.data.frame(assay(vst.deseq))
 apg <- read.delim('Immune_escape/APG_list.txt')
-apgmut.master <- read.delim('Immmune_escape/EPICC_APGMUT_master_file.txt')
+apgmut.master <- read.delim('Immune_escape/EPICC_APG_MUT_master_file.txt')
 
 # Plot expression of a given gene in wild-type and mutated biopsies
-gene <- 'RFXAP' #or B2M or NLRC5
+gene <- 'RFXAP' # B2M or NLRC5 (or RFXAP)
 ensid <- apg$EnsID[apg$GeneName==gene]
 gene.muts.regions <- apgmut.master$Sample[apgmut.master[,gene]>0]
 gene.df <- epicc.df[epicc.df$MatchRNA=='Yes',c('Sample','Patient','Region','Type')]
 gene.df$Mut <- gene.df$Sample %in% gene.muts.regions
-gene.df$Exp <- as.numeric(expTable.master[expTable.master$GeneID==ensid,gene.df$Sample])
+#gene.df$Exp <- as.numeric(expTable.master[expTable.master$GeneID==ensid,gene.df$Sample])
+gene.df <- subset(gene.df, Sample %in% names(geneexp))
+gene.df$Exp <- as.numeric(geneexp[ensid,gene.df$Sample]) # updated computation based on VST values
 ggplot(gene.df, aes(x=Mut, y=Exp)) +
   geom_boxplot(outlier.shape=NA) + theme_mypub() +
   geom_jitter(height=0, width=0.1, aes(colour=Type, shape=Type)) +
   stat_compare_means(comparisons=list(c('FALSE','TRUE'))) +
-  scale_x_discrete(labels=c('wild-type','mutated')) + labs(x=gene,y=paste0(gene,' expression (TPM)')) +
+  scale_x_discrete(labels=c('wild-type','mutated')) + labs(x=gene,y=paste0(gene,' expression (VST)')) +
+  scale_shape_discrete(labels=c('deep WGS','low-pass WGS')) +
   scale_colour_manual(values=c('darkblue','skyblue'), labels=c('deep WGS','low-pass WGS'))
 
 # Plot expression of the sum of all HLA type-I in biopsies mutated/wild-type for an APG
-gene.df$HLAA <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000206503",gene.df$Sample])
-gene.df$HLAB <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000234745",gene.df$Sample])
-gene.df$HLAC <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000204525",gene.df$Sample])
+#gene.df$HLAA <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000206503",gene.df$Sample])
+#gene.df$HLAB <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000234745",gene.df$Sample])
+#gene.df$HLAC <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000204525",gene.df$Sample])
+gene.df$HLAA <- as.numeric(geneexp["ENSG00000206503",gene.df$Sample])
+gene.df$HLAB <- as.numeric(geneexp["ENSG00000234745",gene.df$Sample])
+gene.df$HLAC <- as.numeric(geneexp["ENSG00000204525",gene.df$Sample])
 ggplot(gene.df, aes(x=Mut, y=HLAA+HLAB+HLAC)) +
   geom_boxplot(outlier.shape=NA) + theme_mypub() +
   geom_jitter(height=0, width=0.2, aes(colour=Type, shape=Type)) +
   stat_compare_means(comparisons=list(c('FALSE','TRUE'))) +
-  scale_x_discrete(labels=c('wild-type','mutated')) + labs(x=gene,y=('HLA class-I expression (TPM)')) +
-  scale_colour_manual(values=c('darkblue','skyblue'),labels=c('deep WGS','low-pass WGS')) + scale_y_log10() +
+  scale_x_discrete(labels=c('wild-type','mutated')) + labs(x=gene,y=('HLA class-I expression (VST)')) +
+  scale_colour_manual(values=c('darkblue','skyblue'),labels=c('deep WGS','low-pass WGS')) + #scale_y_log10() +
   scale_shape_discrete(labels=c('deep WGS','low-pass WGS'))
 
 # Adenoma vs carcinoma ----------------------------------------------------
@@ -40,14 +48,54 @@ burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
 
 # subset to only take into account patients who have an adenoma
 burden.sub <- subset(burden.df, Patient %in% adenomaList)
+# optional: filter out C530, as its adenomas are of low quality
+ burden.sub <- subset(burden.sub, !(Patient %in% c('C530')))
+burden.other <- lmer(PropBurden ~ 1 + (1 | Patient), data=burden.sub)
+burden.lmer <- lmer(PropBurden ~ Tissue + (1 | Patient), data=burden.sub)
+summary(burden.lmer)
+p.lmer <- anova(burden.lmer, burden.other)$`Pr(>Chisq)`[2]
 ggplot(burden.sub, aes(x=Tissue, y=PropBurden, fill=Tissue)) +
+  geom_boxplot(outlier.shape=NA) + geom_jitter(height=0, width=0.1) +
+  theme_mypub() +
+  scale_fill_manual(values=setNames(c('grey80','grey40'),c('Adenoma','Cancer'))) +
+  stat_compare_means(label.y.npc=0.95, comparisons=list(c('Adenoma','Cancer')), label.y=0.65) + 
+  guides(fill='none') + labs(y='Proportional neoantigen burden') +
+  annotate('text',x=1, y=0.75, label=paste0('p(fixed effect)=',scientific(p.lmer,2)))
+
+# subset to MMRp
+burden.sub <- burden.sub[burden.sub$MSI=='MSS',]
+burden.other <- lmer(PropBurden ~ 1 + (1 | Patient), data=burden.sub)
+burden.lmer <- lmer(PropBurden ~ Tissue + (1 | Patient), data=burden.sub)
+summary(burden.lmer)
+p.lmer <- anova(burden.lmer, burden.other)$`Pr(>Chisq)`[2]
+ggplot(burden.sub, aes(x=Tissue, y=PropBurden, fill=Tissue)) +
+  geom_boxplot(outlier.shape=NA) + geom_jitter(height=0, width=0.1) +
+  theme_mypub() +
+  stat_compare_means(label.y.npc=0.95, comparisons=list(c('Adenoma','Cancer')), label.y=0.65) + 
+  scale_fill_manual(values=setNames(c('grey80','grey40'),c('Adenoma','Cancer')) ) +
+  guides(fill='none') + labs(y='Proportional neoantigen burden') +
+  annotate('text',x=1, y=0.75, label=paste0('p(fixed effect)=',scientific(p.lmer,2)))
+
+
+# Plot association between total mutation burden and neoantigen burden
+ggplot(burden.df, aes(x=TotalWGS, y=SNVBurden, colour=MSI)) + geom_point() +
+  theme_mypub() + scale_x_log10() + scale_y_log10() + facet_wrap(.~Tissue) +
+  scale_colour_manual(values=setNames(c('#bc432d','#568b7e'),c('MSI','MSS'))) +
+  labs(x='Total mut burden (WGS)', y='Total neoantigen burden', colour='') +
+  theme(strip.background = element_blank())
+ggplot(burden.df, aes(x=TotalWGS, y=PropBurden, colour=MSI)) + geom_point() +
+  theme_mypub() + scale_x_log10() + facet_wrap(.~Tissue) +
+  scale_colour_manual(values=setNames(c('#bc432d','#568b7e'),c('MSI','MSS'))) +
+  labs(x='Total mut burden (WGS)', y='Prop neoantigen burden', colour='') +
+  theme(strip.background = element_blank())
+
+burden.sub <- subset(burden.df, Patient %in% adenomaList & MSI=='MSS')
+ggplot(burden.sub, aes(x=Tissue, y=TotalWGS, fill=Tissue)) +
   geom_boxplot(outlier.shape=NA) + geom_jitter(height=0, width=0.1) +
   theme_mypub() +
   stat_compare_means(label.y.npc=0.95, comparisons=list(c('Adenoma','Cancer'))) + 
   scale_fill_manual(values=setNames(c('grey80','grey40'),c('Adenoma','Cancer'))) +
-  guides(fill='none') + labs(y='Proportional neoantigen burden')
-
-
+  guides(fill='none') + labs(y='Total mut burden')
 
 # Burden association with cancer-level escape -----------------------------
 
@@ -60,6 +108,9 @@ ggplot(burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS',], aes(x=patE
   scale_fill_manual(values=c('grey40','goldenrod','brown')) +
   stat_compare_means(comparisons=list(c('No','Yes'),c('Partial','Yes'),c('No','Partial')), label.y = c(0.635, 0.615, 0.6)) +
   labs(y='Proportional neoantigen burden', x='Cancer escape')
+
+
+
 
 # Immune dNdS with confidence intervals
 burden.df <- subset(burden.df, !is.na(imm_dNdS) & imm_dNdS<Inf)
@@ -184,57 +235,122 @@ ggplot(vaf.cum.df, aes(x=invVAF,y=cumNeo)) +
 ip.inf.df <- readRDS('FFPE_samples/cycif_summary_with_normal.rds')
 ip.inf.df$sample_type <- factor(ip.inf.df$sample_type, levels=c('Normal','Superficial','Invasive','Node'))
 ip.inf.sub <- subset(ip.inf.df, !is.na(patEscape) & sample_type!='Normal')
+# add in epigenetic escape information that is originally not present in dataset
+# since all epigenetically escaped cases are without genetic escape, we add this escape as a new category, Epi
+ip.inf.sub$epiEscape <- patientEsc.df$EpigeneticEscape[match(ip.inf.sub$PatientEPICC, patientEsc.df$Patient)]
+ip.inf.sub$patEscape[ip.inf.sub$patEscape=='No' & ip.inf.sub$epiEscape!='No' & !is.na(ip.inf.sub$epiEscape)] <- ip.inf.sub$epiEscape[ip.inf.sub$patEscape=='No' & ip.inf.sub$epiEscape!='No' & !is.na(ip.inf.sub$epiEscape)]
+ip.inf.sub$patEscape[ip.inf.sub$patEscape=='Weak'] <- 'Epi'
+ip.inf.sub$patEscape <- factor(ip.inf.sub$patEscape, levels=c('No','Epi','Partial','Yes'))
 
 # PD-1+ cells
-ggplot(ip.inf.sub, aes(y=per_epi_cell.PD1plus, x=patEscape, fill=patEscape)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
+inf.lmer <- lmer(per_epi_cell.PD1plus ~ patEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.PD1plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2] # comparison of models with and without fixed effect
+ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.PD1plus, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
   theme_mypub() +
-  scale_fill_manual(values=c('grey40','goldenrod','brown')) +
-  stat_compare_means(comparisons=list(c('No','Partial'),c('Partial','Yes'),c('No','Yes'))) +
-  guides(fill='none') +
-  labs(x='Cancer escape', y='PD-1+ cells [per epi cell]') 
+  labs(y='PD-1+ cells [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown'))  +
+  stat_compare_means(comparisons=list(c('No','Partial'),c('Partial','Yes'),c('No','Yes')), label.y = c(0.06,0.075, 0.09)) +
+  annotate('text', x=1.5, y=0.11, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
 
 # VISTA+ cells
 # note that coord_cartesian omits outliers but does not affect test results
-ggplot(ip.inf.sub, aes(y=per_epi_cell.VISTAplus, x=patEscape, fill=patEscape)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
-  coord_cartesian(ylim=c(0, 0.35)) + # comment out to see full results
+inf.lmer <- lmer(per_epi_cell.VISTAplus ~ patEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.VISTAplus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.VISTAplus, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
   theme_mypub() +
-  scale_fill_manual(values=c('grey40','goldenrod','brown')) +
-  stat_compare_means(comparisons=list(c('No','Partial'),c('No','Yes'),c('Partial','Yes')),
-                     label.y = c(0.1, 0.15, 0.2)) +
-  guides(fill='none') +
-  labs(x='Cancer escape', y='VISTA+ cells [per epi cell]')
+  labs(y='VISTA+ cells [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown'))  +
+  stat_compare_means(comparisons=list(c('No','Partial'),c('Partial','Yes'),c('Epi','Partial')), label.y = c(0.04,0.06, 0.08)) +
+  coord_cartesian(ylim=c(0, 0.25)) + # comment out to see full results
+  annotate('text', x=1.5, y=0.25, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
 
 # Stromal cells
-ggplot(ip.inf.sub, aes(y=per_epi_cell.Stromal_cells, x=patEscape, fill=patEscape)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
+inf.lmer <- lmer(per_epi_cell.Stromal_cells ~ patEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.Stromal_cells ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.Stromal_cells, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
   theme_mypub() +
-  scale_fill_manual(values=c('grey40','goldenrod','brown')) +
-  stat_compare_means(comparisons=list(c('No','Partial'),c('Partial','Yes'),c('No','Yes'))) +
-  guides(fill='none') +
-  labs(x='Cancer escape', y='Stromal cells [per epi cell]') 
+  labs(y='Stromal cells [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40', 'yellowgreen','goldenrod','brown')) +
+  stat_compare_means(comparisons=list(c('No','Yes'),c('Epi','Yes'),c('Partial','Yes')), label.y = c(0.52, 0.575, 0.62)) +
+  annotate('text', x=1.5, y=0.65, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
+
+# CD163+ cells
+# note that coord_cartesian omits outliers but does not affect test results
+inf.lmer <- lmer(per_epi_cell.CD163plus ~ patEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.CD163plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.CD163plus, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
+  theme_mypub() +
+  labs(y='CD163+ cells [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown'))  +
+  stat_compare_means(comparisons=list(c('No','Partial')), label.y = c(0.16)) +
+  coord_cartesian(ylim=c(0, 0.22)) +  # comment out to see full results
+  annotate('text', x=1.5, y=0.21, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
+  
 
 # CTLs
-ggplot(ip.inf.sub, aes(y=per_epi_cell.Cytotoxic_T_cell, x=patEscape, fill=patEscape)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
+inf.lmer <- lmer(per_epi_cell.Cytotoxic_T_cell ~ patEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.Cytotoxic_T_cell ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.Cytotoxic_T_cell, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
   theme_mypub() +
-  scale_fill_manual(values=c('grey40','goldenrod','brown')) +
-  stat_compare_means(comparisons=list(c('No','Partial'),c('No','Yes'),c('Partial','Yes')),
-                     label.y=c(0.4, 0.5, 0.6)) +
-  guides(fill='none') +
-  labs(x='Cancer escape', y='CTLs [per epi cell]') 
+  labs(y='CTLs [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown')) +
+  stat_compare_means(comparisons=list(c('Partial','No'),c('Epi','Yes'),c('No','Yes')), label.y = c(0.68, 0.75, 0.8)) +
+  annotate('text', x=1.5, y=0.95, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
 
 # CTLA-4 Tregs
-ggplot(ip.inf.sub, aes(y=per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus, x=patEscape, fill=patEscape)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
+inf.lmer <- lmer(per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus ~ patEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
+  theme_mypub() + 
+  labs(y='CTLA-4+ Tregs [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown')) +
+  stat_compare_means(comparisons=list(c('No','Partial'),c('No','Yes')), label.y = c(0.325, 0.375)) +
+  annotate('text', x=1.5, y=0.45, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
+
+# Comparison of non-escaped and epigenetically escaped cancers only
+ip.inf.sub <- subset(ip.inf.sub, (!is.na(epiEscape) & epiEscape!='No') | patEscape=='No')
+
+# CD68+ cells
+inf.lmer <- lmer(per_epi_cell.CD68plus ~ epiEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.CD68plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub[!is.na(ip.inf.sub$epiEscape),], aes(x=epiEscape, y=per_epi_cell.CD68plus, fill=epiEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
   theme_mypub() +
-  scale_fill_manual(values=c('grey40','goldenrod','brown')) +
-  stat_compare_means(comparisons=list(c('No','Partial'),c('No','Yes'),c('Partial','Yes')),
-                     label.y=c(0.3, 0.35, 0.4)) +
-  guides(fill='none') +
-  labs(x='Cancer escape', y='CTLA-4+ Tregs [per epi cell]') 
+  stat_compare_means(comparisons=list(c('No','Weak')), label.y=c(0.2)) +
+  labs(y='CD68+ cells [per epi cell]', x='Epi. escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen')) +
+  annotate('text', x=1, y=0.25, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Yes'))
 
-
-
-
+# CD45RO+ cells
+inf.lmer <- lmer(per_epi_cell.CD45ROplus ~ epiEscape + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.CD45ROplus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2]
+ggplot(ip.inf.sub[!is.na(ip.inf.sub$epiEscape),], aes(x=epiEscape, y=per_epi_cell.CD45ROplus, fill=epiEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(height=0, width=0.1) +
+  theme_mypub() +
+  stat_compare_means(comparisons=list(c('No','Weak')), label.y=c(0.14)) +
+  labs(y='CD45RO+ cells [per epi cell]', x='Epi. escape') + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen')) +
+  annotate('text', x=1, y=0.24, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  scale_x_discrete(labels=c('No','Yes'))

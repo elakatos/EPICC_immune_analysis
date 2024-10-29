@@ -9,6 +9,10 @@ names(ip.inf.df) <- gsub('\\+','plus',gsub(' ','_',names(ip.inf.df)))
 ip.inf.df$sample_type <- factor(ip.inf.df$sample_type, levels=c('Normal','Superficial','Invasive','Node'))
 
 ip.inf.sub <- ip.inf.df
+
+inf.lmer <- lmer(per_epi_cell.Cytotoxic_T_cell ~ sample_type + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.Cytotoxic_T_cell ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2] # comparison of models with and without fixed effect
 # CTLs
 # note: scale limit omits two outliers from plotting - it does not affect the results
 ggplot(ip.inf.sub, aes(y=per_epi_cell.Cytotoxic_T_cell, x=sample_type, fill=sample_type)) +
@@ -17,35 +21,49 @@ ggplot(ip.inf.sub, aes(y=per_epi_cell.Cytotoxic_T_cell, x=sample_type, fill=samp
     c('Normal','Superficial'),c('Normal','Invasive'),c('Normal','Node')),
     label.y = c(0.2, 0.24, 0.275)) +
   scale_fill_manual(values=setNames(c('skyblue','#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
-  scale_y_continuous(limits=c(0, 0.35)) + # comment this out to see full results
+  scale_y_continuous(limits=c(0, 0.36)) + # comment this out to see full results
+  annotate('text', x=1.5, y=0.36, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   guides(fill='none') + labs(y='Cytotoxic T-cells\n[per epi. cell]', x='Sample type')
 
 # CTLA-4 Tregs
+inf.lmer <- lmer(per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus ~ sample_type + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2] # comparison of models with and without fixed effect
 ggplot(ip.inf.sub, aes(y=per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus, x=sample_type, fill=sample_type)) +
   geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) + theme_mypub() +
   stat_compare_means(comparisons=list(
     c('Normal','Superficial'),c('Normal','Invasive'),c('Normal','Node')),
     label.y=c(0.19, 0.23, 0.27)) +
   scale_fill_manual(values=setNames(c('skyblue','#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
+  annotate('text', x=1.5, y=0.35, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   guides(fill='none') + labs(y='CTLA4+ Tregs\n[per epi. cell]', x='Sample type')
-
-# CD163+ macrophages
-ggplot(ip.inf.sub, aes(y=per_epi_cell.CD163plus, x=sample_type, fill=sample_type)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) + theme_mypub() +
-  stat_compare_means(comparisons=list(
-    c('Normal','Superficial'),c('Normal','Invasive'),c('Normal','Node')),
-    label.y=c(0.225, 0.25, 0.275)) +
-  scale_fill_manual(values=setNames(c('skyblue','#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
-  guides(fill='none') + labs(y='CD163+ cells\n[per epi.cell]', x='Sample type')
 
 # PD-L1 epithelial cell fraction compared between tumour regions
 ip.inf.sub <- subset(ip.inf.df,sample_type!='Normal')
+
+inf.lmer <- lmer(fraction.PDL1plus_epithelial_cells ~ sample_type + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(fraction.PDL1plus_epithelial_cells ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2] # comparison of models with and without fixed effect
 ggplot(ip.inf.sub, aes(y=fraction.PDL1plus_epithelial_cells, x=sample_type, fill=sample_type)) +
   geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) + theme_mypub() +
   stat_compare_means(comparisons=list(c('Superficial','Invasive'),c('Superficial','Node'),c('Node','Invasive')),
                      label.y=c(0.05, 0.07, 0.09)) +
   scale_fill_manual(values=setNames(c('skyblue','#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
+  annotate('text', x=1.5, y=0.11, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   guides(fill='none') + labs( y='Fraction of PD-L1+ epi. cells',x='Sample type')
+
+# Other PD-L1+ cells across regions
+ip.inf.sub <- subset(ip.inf.df,sample_type!='Normal')
+inf.lmer <- lmer(fraction.PDL1plus ~ sample_type + (1 | PatientEPICC), data=ip.inf.sub)
+inf.other <- lmer(fraction.PDL1plus ~ 1 + (1 | PatientEPICC), data=ip.inf.sub)
+p.lmer <- anova(inf.lmer, inf.other)$`Pr(>Chisq)`[2] # comparison of models with and without fixed effect
+ggplot(ip.inf.sub, aes(y=per_epi_cell.PDL1plus, x=sample_type, fill=sample_type)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) + theme_mypub() +
+  stat_compare_means(comparisons=list(c('Superficial','Invasive'),c('Superficial','Node'),c('Node','Invasive')),
+                     label.y=c(0.1, 0.13, 0.16)) +
+  scale_fill_manual(values=setNames(c('skyblue','#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
+  annotate('text', x=1.5, y=0.22, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  guides(fill='none') + labs( y='PD-L1+ non-epi. cells [per epi cell]',x='Sample type')
 
 
 # Infiltrating lymphocytes (H&E) ------------------------------------------

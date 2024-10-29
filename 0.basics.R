@@ -4,9 +4,10 @@
 
 
 library(ggplot2); library(reshape2); library(ggpubr); library(gridExtra); library(vcfR)
-require(RColorBrewer); require(scales); library(stringr)
+require(RColorBrewer); require(scales); library(stringr); library(betareg)
 library(jtools); library(betareg); library(phytools); library(matrixStats);
 library(GenomicRanges); library(rtracklayer); library(readxl); library(tidyverse)
+library(lmerTest)
 
 options(stringsAsFactors = F)
 setwd('~/EPICC/') # Change this folder depending on the location of the downloaded files
@@ -27,7 +28,7 @@ theme_mypub <- function(base_size = 14,
 
 epicc.df <- read.delim('ListDNAPass.EPICC.txt')
 samples <- unique(epicc.df$Patient) # patient ID list
-msiList <- c('C552','C518','C516','C548','C536')
+msiList <- c('C552','C518','C516','C548','C536','C562')
 adenomaList <- unique(epicc.df$Patient[epicc.df$Tissue=='Adenoma'])
 
 rna.df <- read.delim('RNA/ListRNAPass.EPICC.txt')

@@ -17,6 +17,15 @@ plot_summs(all.test.mv, coefs=c('Type=Gland'='SampleTypeGland','Tissue=Adenoma'=
                                 'Potential escape'='EscapeWeak','Escape'='EscapeYes','Purity'='Purity'),
            colors=c('purple4')) +
   theme_mypub() + theme(axis.title.y = element_blank())+ labs(x='Change in prop neoantigen burden')
+# include patient (smallest and largest estimated coeff) as well to show in comparison to other variables
+which.min(all.test.mv$coefficients$mean[startsWith(names(all.test.mv$coefficients$mean), 'Patient')])
+which.max(all.test.mv$coefficients$mean[startsWith(names(all.test.mv$coefficients$mean), 'Patient')])
+plot_summs(all.test.mv, coefs=c('Type=Gland'='SampleTypeGland','Tissue=Adenoma'='TissueAdenoma',
+                                'Potential escape'='EscapeWeak','Escape'='EscapeYes','Purity'='Purity',
+                                'Patient (min/max)'='Patient=C518', 'Patient (min/max)'='Patient=C519'),
+           colors=c('purple4')) +
+  theme_mypub() + theme(axis.title.y = element_blank())+ labs(x='Change in prop neoantigen burden')
+
 # full plot with all inter-tumour effects as well
 plot_summs(all.test.mv, colors=c('purple4'), omit.coefs = c('(phi)','(Intercept)')) +
   theme_mypub() +
@@ -50,6 +59,14 @@ all.test.mv <- betareg(PropBurden ~ SampleType + Patient + Purity, data=ip.burde
 summary(all.test.mv)
 plot_summs(all.test.mv, coefs=c('Type=Node'='SampleTypenode','Type=Invasive'='SampleTypeinvasive',
                                 'Purity'='Purity'),
+           colors=c('purple4')) +
+  theme_mypub() + theme(axis.title.y = element_blank())+ labs(x='Change in prop neoantigen burden')
+
+# include patient (smallest and largest estimated coeff) as well to show in comparison to other variables
+which.min(all.test.mv$coefficients$mean[startsWith(names(all.test.mv$coefficients$mean), 'Patient')])
+which.max(all.test.mv$coefficients$mean[startsWith(names(all.test.mv$coefficients$mean), 'Patient')])
+plot_summs(all.test.mv, coefs=c('Type=Node'='SampleTypenode','Type=Invasive'='SampleTypeinvasive',
+                                'Purity'='Purity', 'Patient (min/max)'='Patient=C537','Patient (min/max)'='Patient=C550'),
            colors=c('purple4')) +
   theme_mypub() + theme(axis.title.y = element_blank())+ labs(x='Change in prop neoantigen burden')
 # full plot with all inter-tumour effects as well

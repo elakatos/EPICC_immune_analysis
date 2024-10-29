@@ -34,6 +34,7 @@ nonneoIdentifier <- c('Non-Neo')
 mutTable.total <- read.delim('Subclonality/NA_nonNA_allcancers.txt')
 mutTable.total$GeneGroup <- geneGroup.df$Group[match(mutTable.total$GeneID, geneGroup.df$ensembl_gene_id)]
 mutTable.total <- mutTable.total[!is.na(mutTable.total$GeneGroup),]
+mutTable.total$MSI <- ifelse(mutTable.total$Sample %in% msiList, 'MMRd','MMRp')
 
 # Plot neoantigen/not for clonal mutation of each gene group 
 mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category%in% c('truncal','truncal_full'),]
@@ -41,7 +42,6 @@ mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% neoIdentifier] 
 ct <- chisq.test(mutTable.total.sub$GeneGroup, mutTable.total.sub$Neoantigen)
 ggplot(mutTable.total.sub, aes(x=GeneGroup, fill=Neoantigen)) +
   geom_bar(position='fill', width=0.75) +
-  #scale_fill_manual(values=setNames(c("#b16710",'grey80'),c('SB Neo','Non-Neo')), labels=c('Not neoant','Neoant')) +
   scale_fill_manual(values=setNames(c("#5a4990",'grey80'),c('SB Neo','Non-Neo')), labels=c('Not neoant','Neoant')) +
   scale_y_continuous(labels=percent_format(), expand=c(0,0), limits=c(0, 1.1)) +
   theme_mypub() + labs(x='Gene group', y=paste0('Clonal ',muttype,'s'), fill='') +
@@ -60,6 +60,9 @@ ggplot(mutTable.total.sub, aes(x=GeneGroup, fill=Neoantigen)) +
   geom_signif(aes(y=1), y_position=c(1.03), xmin=c(1), xmax=c(4),
               annotation=scientific(ct$p.value,digits=3), tip_length=0, size=0.5)
 
+
+mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category%in% c('truncal','truncal_full'),]
+mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% neoIdentifier] <- 'SB Neo'; mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% nonneoIdentifier] <- 'Non-Neo'
 
 # Compute and plot odds ratio for neoantigen being located in each gene group
 f.df.total <- data.frame(matrix(vector(),ncol=6))
@@ -93,6 +96,52 @@ ggplot(f.df.total) +
   labs(y='Odds ratio', x='Gene group', fill=paste0(muttype,'s'), colour=paste0(muttype,'s')) +
   geom_point(data=f.df.total[f.df.total$P<0.05,], aes(x=Xloc, y=1.6), shape=8)
 
+# MMRp / MMRd
+# Repeat above for MMRp/d samples separately
+mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category%in% c('truncal','truncal_full'),]
+mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% neoIdentifier] <- 'SB Neo'; mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% nonneoIdentifier] <- 'Non-Neo'
+chisq.test(paste0(mutTable.total.sub$Neoantigen,mutTable.total.sub$GeneGroup), mutTable.total.sub$MSI)
+mutTable.total.sub <- subset(mutTable.total.sub, MSI=='MMRd')
+ct <- chisq.test(mutTable.total.sub$GeneGroup, mutTable.total.sub$Neoantigen)
+ggplot(mutTable.total.sub, aes(x=GeneGroup, fill=Neoantigen)) +
+  geom_bar(position='fill', width=0.75) +
+  scale_fill_manual(values=setNames(c("#5a4990",'grey80'),c('SB Neo','Non-Neo')), labels=c('Not neoant','Neoant')) +
+  scale_y_continuous(labels=percent_format(), expand=c(0,0), limits=c(0, 1.1)) +
+  theme_mypub() + labs(x='Gene group', y=paste0('Clonal ',muttype,'s'), fill='') +
+  geom_signif(aes(y=1), y_position=c(1.03), xmin=c(1), xmax=c(4),
+              annotation=scientific(ct$p.value,digits=3), tip_length=0, size=0.5)
+
+mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category%in% c( 'private','regional','shared_subclonal','other'),]
+mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% neoIdentifier] <- 'SB Neo'; mutTable.total.sub$Neoantigen[mutTable.total.sub$Neoantigen %in% nonneoIdentifier] <- 'Non-Neo'
+chisq.test(paste0(mutTable.total.sub$Neoantigen,mutTable.total.sub$GeneGroup), mutTable.total.sub$MSI)
+mutTable.total.sub <- subset(mutTable.total.sub, MSI=='MMRd')
+ct <- chisq.test(mutTable.total.sub$GeneGroup, mutTable.total.sub$Neoantigen)
+ggplot(mutTable.total.sub, aes(x=GeneGroup, fill=Neoantigen)) +
+  geom_bar(position='fill', width=0.75) +
+  scale_fill_manual(values=setNames(c("#b16710",'grey80'),c('SB Neo','Non-Neo')), labels=c('Not neoant','Neoant')) +
+  scale_y_continuous(labels=percent_format(), expand=c(0,0), limits=c(0, 1.1)) +
+  theme_mypub() + labs(x='Gene group', y=paste0('Subclonal ',muttype,'s'), fill='') +
+  geom_signif(aes(y=1), y_position=c(1.03), xmin=c(1), xmax=c(4),
+              annotation=scientific(ct$p.value,digits=3), tip_length=0, size=0.5)
+
+mutTable.total <- mutTable.total[mutTable.total$MSI=='MMRd',]
+f.df.total <- data.frame(matrix(vector(),ncol=6))
+for (g in 1:4){
+  group.genes <- geneGroup.df$ensembl_gene_id[geneGroup.df$Group==g]
+  mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(mutTable.total$Category %in% c('adenoma_only','private_adenoma','truncal_full')),]
+  f.all <- fisher.test(mutTable.total.sub$GeneID %in% group.genes, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+  mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category%in% c('truncal'),]
+  f.cl <- fisher.test(mutTable.total.sub$GeneID %in% group.genes, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+  mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category %in% c('private','regional','shared_subclonal','other'),]
+  f.sc <- fisher.test(mutTable.total.sub$GeneID %in% group.genes, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+  f.df <- data.frame(Mutation=c('All','Clonal','Subclonal'), OR=c(f.all$estimate,f.cl$estimate, f.sc$estimate),
+                     Conf_low=c(f.all$conf.int[1],f.cl$conf.int[1],f.sc$conf.int[1]), Conf_high=c(f.all$conf.int[2],f.cl$conf.int[2],f.sc$conf.int[2]),
+                     P=c(f.all$p.value,f.cl$p.value, f.sc$p.value),
+                     Group=g)
+  f.df.total <- rbind(f.df.total, f.df)
+}
+f.df.total
+
 
 # Consistently expressed gene and Neo co-occurrence -----------------------
 
@@ -102,7 +151,7 @@ ggplot(f.df.total) +
 expTable.master.sub <- expTable.master[,names(expTable.master) %in% c(rna.df[rna.df$Region!='E',]$Sample, 'GeneID')]
 const.exp <- expTable.master.sub$GeneID[rowSums(expTable.master.sub[,-1]>1)>276]
 
-muttype <- 'SNV' # choose from SNV/FS
+muttype <- 'FS' # choose from SNV/FS
 neoIdentifier <- c('SBRecopo Neo','SBRP Neo','SB Neo')
 nonneoIdentifier <- c('Non-Neo')
 mutTable.total <- read.delim('Subclonality/NA_nonNA_allcancers.txt')
@@ -130,6 +179,38 @@ ggplot(f.df) +
   geom_point(data=f.df[f.df$P<0.05,], aes(x=as.numeric(as.factor(Mutation)), y=1.2), shape=8) +
   scale_x_continuous(breaks=c(1,2,3), labels=f.df$Mutation) + theme(axis.title.x = element_blank())
 
+# MMRp / MMRd
+# Repeat above for MMRp/d separately
+mutTable.total <- read.delim('Subclonality/NA_nonNA_allcancers.txt')
+mutTable.total <- subset(mutTable.total, (Sample %in% msiList)) # filter for MMRp/d
+mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(mutTable.total$Category) %in% c('adenoma_only','private_adenoma','truncal_full'),]
+f.all <- fisher.test(mutTable.total.sub$GeneID %in% const.exp, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category%in% c('truncal'),]
+f.cl <- fisher.test(mutTable.total.sub$GeneID %in% const.exp, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+mutTable.total.sub <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & mutTable.total$Category %in% c('private','regional', 'other', 'shared_subclonal'),]
+f.sc <- fisher.test(mutTable.total.sub$GeneID %in% const.exp, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+f.df <- data.frame(Mutation=paste0(c('All ','Clonal ','Subclonal '),muttype,'s'), OR=c(f.all$estimate,f.cl$estimate, f.sc$estimate),
+                   Conf_low=c(f.all$conf.int[1],f.cl$conf.int[1],f.sc$conf.int[1]), Conf_high=c(f.all$conf.int[2],f.cl$conf.int[2],f.sc$conf.int[2]),
+                   P=c(f.all$p.value,f.cl$p.value, f.sc$p.value))
+f.df
+
+# Analysis after downsampling of clonal mutation
+clonal.OR <- c()
+mutTable.total <- mutTable.total[mutTable.total$MutType==muttype & (mutTable.total$Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(mutTable.total$Category %in% c('adenoma_only','private_adenoma','truncal_full')),]
+for (i in 1:50){
+  mutTable.total.downsamp <- rbind(subset(mutTable.total, Category!='truncal'),
+                                   subset(mutTable.total, Category=='truncal')[sample(1:3084,2378),])
+  mutTable.total.sub <- mutTable.total.downsamp
+  f.all <- fisher.test(mutTable.total.sub$GeneID %in% const.exp, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+  mutTable.total.sub <- mutTable.total.downsamp[mutTable.total.downsamp$Category%in% c('truncal'),]
+  f.cl <- fisher.test(mutTable.total.sub$GeneID %in% const.exp, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+  mutTable.total.sub <- mutTable.total.downsamp[mutTable.total.downsamp$Category %in% c('private','regional', 'other', 'shared_subclonal'),]
+  f.sc <- fisher.test(mutTable.total.sub$GeneID %in% const.exp, mutTable.total.sub$Neoantigen %in% neoIdentifier)
+  f.df <- data.frame(Mutation=paste0(c('All ','Clonal ','Subclonal '),muttype,'s'), OR=c(f.all$estimate,f.cl$estimate, f.sc$estimate),
+                     Conf_low=c(f.all$conf.int[1],f.cl$conf.int[1],f.sc$conf.int[1]), Conf_high=c(f.all$conf.int[2],f.cl$conf.int[2],f.sc$conf.int[2]),
+                     P=c(f.all$p.value,f.cl$p.value, f.sc$p.value))
+  clonal.OR <- c(clonal.OR, f.df$P[grepl('Clonal',f.df$Mutation)])
+}
 
 # Mutation RNA depletion and Neo co-occurrence -------------------------------
 
@@ -139,6 +220,7 @@ nonneoIdentifier <- c('Non-Neo')
 exp.muts.total <- read.delim('RNA/Expression_NA_nonNA_allcancers.txt')
 exp.muts.total <- subset(exp.muts.total, (numExprMut + numNotExprMut)>1)
 
+#exp.muts.total <- subset(exp.muts.total, (Patient %in% msiList)) # filter for MMRp/d
 # go through all, clonal and subclonal and compute a Fisher test
 # column numNotExprMut is the number of biopsies within a cancer with that mutation being transcriptionally depleted
 exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(Category %in% c('adenoma_only','private_adenoma')))
@@ -164,7 +246,37 @@ ggplot(f.df) +
   geom_point(data=f.df[f.df$P<0.05,], aes(x=as.numeric(as.factor(Mutation)), y=4), shape=8) +
   scale_x_continuous(breaks=c(1,2,3), labels=f.df$Mutation) + theme(axis.title.x = element_blank())
 
+# Repeat for MMRp/d separately
+exp.muts.total <- subset(exp.muts.total, Patient!='C516') #exclude C516 that can overly dominate the data
+exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(Category %in% c('adenoma_only','private_adenoma')))
+chisq.test(paste0(exp.muts.sub$Neoantigen %in% neoIdentifier, exp.muts.sub$numNotExprMut>0),exp.muts.sub$Patient %in% msiList)
+exp.muts.sub <- subset(exp.muts.sub, (Patient %in% msiList))
+f.all <- fisher.test(exp.muts.sub$Neoantigen %in% neoIdentifier,exp.muts.sub$numNotExprMut>0)
+exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('truncal','truncal_full'))
+chisq.test(paste0(exp.muts.sub$Neoantigen %in% neoIdentifier, exp.muts.sub$numNotExprMut>0),exp.muts.sub$Patient %in% msiList)
+exp.muts.sub <- subset(exp.muts.sub, (Patient %in% msiList))
+f.cl <- fisher.test(exp.muts.sub$Neoantigen %in% neoIdentifier,exp.muts.sub$numNotExprMut>0)
+exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('private','regional','shared_subclonal','other'))
+chisq.test(paste0(exp.muts.sub$Neoantigen %in% neoIdentifier, exp.muts.sub$numNotExprMut>0),exp.muts.sub$Patient %in% msiList)
+exp.muts.sub <- subset(exp.muts.sub, (Patient %in% msiList))
+f.sc <- fisher.test(exp.muts.sub$Neoantigen %in% neoIdentifier,exp.muts.sub$numNotExprMut>0)
+f.df <- data.frame(Mutation=c('All','Clonal','Subclonal'), OR=c(f.all$estimate,f.cl$estimate, f.sc$estimate),
+                   Conf_low=c(f.all$conf.int[1],f.cl$conf.int[1],f.sc$conf.int[1]), Conf_high=c(f.all$conf.int[2],f.cl$conf.int[2],f.sc$conf.int[2]),
+                   P=c(f.all$p.value,f.cl$p.value, f.sc$p.value))
+f.df
 
+# Downsample clonal mutations to evaluate if similar conclusions would be drawn
+exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('truncal','truncal_full'))
+f.downsampled <- data.frame(matrix(vector(),ncol=2)); names(f.downsampled) <- c('estimate','p-value')
+for (i in 1:100){
+  exp.muts.tmp <- exp.muts.sub[sample(1:nrow(exp.muts.sub), 53),]
+  f.tmp <- fisher.test(exp.muts.tmp$Neoantigen %in% neoIdentifier,exp.muts.tmp$numNotExprMut>0)
+  f.downsampled[nrow(f.downsampled)+1,] <- c(as.numeric(f.tmp$estimate), as.numeric(f.tmp$p.value))
+}
+ggplot(f.downsampled, aes(x='',y=estimate)) + geom_violin() + theme_mypub() +
+  geom_hline(yintercept = 1, linetype='dashed') + theme(axis.title.x = element_blank()) +
+  labs(y='Odds ratio')
+  
 # Compute and plot the proportion of mutations that are depleted (for each cancer)
 exp.muts.total <- read.delim('RNA/Expression_NA_nonNA_allcancers.txt')
 exp.muts.total <- subset(exp.muts.total, (numExprMut + numNotExprMut)>1)
@@ -174,16 +286,17 @@ exp.muts.total$NotExp <- 1*(exp.muts.total$numNotExprMut>0)
 exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('truncal','truncal_full'))
 notexp.pat <- aggregate(exp.muts.sub$NotExp, by=list(exp.muts.sub$Patient, exp.muts.sub$Neoantigen %in% neoIdentifier), mean)
 notexp.pat$Escape <- patientEsc.df$Escape[match(notexp.pat$Group.1, patientEsc.df$Patient)]
+notexp.pat$MSI <- ifelse(notexp.pat$Group.1 %in% msiList, 'MMRd','MMRp')
 # exclude patients with only a value for Neo or Non-Neo as no comparison can be made
 pat.count <- table(notexp.pat$Group.1)
 ggplot(notexp.pat[!(notexp.pat$Group.1 %in% (names(pat.count)[pat.count<2])),], aes(x=Group.2, y=x, colour=Escape)) +
-  geom_point(size=2) + geom_line(aes(group=Group.1), alpha=0.7, size=1.2) +
+  geom_point(size=2, aes(shape=MSI)) + geom_line(aes(group=Group.1), alpha=0.7, size=1.2) +
   theme_mypub() + theme(axis.title.x=element_blank()) +
-  scale_colour_manual(values=c('grey40','goldenrod','brown')) +
-  scale_x_discrete(expand=c(0.1,0.1)) +
-  scale_y_continuous(labels=percent_format(), limit=c(0, 1.1)) +
   stat_compare_means(paired=T, comparisons=list(c('TRUE','FALSE'))) +
-  labs(y='Proportion of mutations\nnot expressed')
+  scale_colour_manual(values=c('grey40','goldenrod','brown')) +
+  scale_x_discrete(expand=c(0.1,0.1), labels=setNames('TRUE','FALSE')) +
+  scale_y_continuous(labels=percent_format(), limit=c(0, 1.1)) +
+  labs(y='Proportion of mutations\nnot expressed') #+ facet_wrap(.~MSI)
 
 
 # Compute and plot the average proportion of biopsies within a cancer that have a clonal mutations depleted
@@ -195,16 +308,17 @@ exp.muts.total$NotExprPc <- exp.muts.total$numNotExprMut/(exp.muts.total$numExpr
 exp.muts.sub <- subset(exp.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & Category %in% c('truncal','truncal_full'))
 notexppc.pat <- aggregate(exp.muts.sub$NotExprPc, by=list(exp.muts.sub$Patient, exp.muts.sub$Neoantigen %in% neoIdentifier), mean)
 notexppc.pat$Escape <- patientEsc.df$Escape[match(notexppc.pat$Group.1, patientEsc.df$Patient)]
+notexppc.pat$MSI <- ifelse(notexppc.pat$Group.1 %in% msiList, 'MMRd','MMRp')
 # exclude patients with only a value for Neo or Non-Neo as no comparison can be made
 pat.count <- table(notexppc.pat$Group.1)
 ggplot(notexppc.pat[!(notexppc.pat$Group.1 %in% (names(pat.count)[pat.count<2])),], aes(x=Group.2, y=x, colour=Escape)) +
-  geom_point(size=2) + geom_line(aes(group=Group.1),alpha=0.7, size=1.2) +
+  geom_point(size=2, aes(shape=MSI)) + geom_line(aes(group=Group.1),alpha=0.7, size=1.2) +
   theme_mypub() + theme(axis.title.x=element_blank()) +
   scale_x_discrete(expand=c(0.1,0.1), labels=c('Non-Neo','Neoantigen')) +
   scale_y_continuous(labels=percent_format(), limit=c(0, 0.75)) +
   scale_colour_manual(values=c('grey40','goldenrod','brown')) +
   stat_compare_means(paired=T, comparisons=list(c('TRUE','FALSE'))) +
-  labs(y='Proportion of mutated samples\nnot expressing mutation')
+  labs(y='Proportion of mutated samples\nnot expressing mutation') #+ facet_wrap(.~MSI)
 
 
 
