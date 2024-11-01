@@ -354,3 +354,55 @@ ggplot(ip.inf.sub[!is.na(ip.inf.sub$epiEscape),], aes(x=epiEscape, y=per_epi_cel
   scale_fill_manual(values=c('grey40','yellowgreen')) +
   annotate('text', x=1, y=0.24, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   scale_x_discrete(labels=c('No','Yes'))
+
+
+# TGFbeta signalling and escape status ------------------------------------
+
+vst.deseq <- readRDS('RNA/allgenes.vsd.ensembl_withC516adenoma.rds')
+geneexp <- as.data.frame(assay(vst.deseq))
+burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
+burden.df$patEscape <- patientEsc.df$EscapeWithEpi[match(burden.df$Patient,patientEsc.df$Patient)] # update with epigenetic escape
+burden.df$patEscape <- factor(burden.df$patEscape, levels = c('No','Epigenetic','Partial','Yes'))
+
+# F-TBRS signature, following Mariathasan et al., 2018
+genes.ftbrs <- c('ACTA2', 'ACTG2', 'ADAM12', 'ADAM19', 'CNN1', 'COL4A1', 'CCN2', 'CTPS1', 'RFLNB', 'FSTL3', 'HSPB1', 'IGFBP3', 'PXDC1', 'SEMA7A', 'SH3PXD2A', 'TAGLN', 'TGFBI', 'TNS1', 'TPM1')
+ensid.ftbrs <- c("ENSG00000120708","ENSG00000183688","ENSG00000168994","ENSG00000187498","ENSG00000070404","ENSG00000149591","ENSG00000138623","ENSG00000107957",
+                 "ENSG00000118523","ENSG00000135074","ENSG00000163017","ENSG00000171793","ENSG00000107796","ENSG00000130176","ENSG00000140416","ENSG00000146674",
+                 "ENSG00000106211","ENSG00000079308","ENSG00000148848")
+exp.ftbrs <- geneexp[ensid.ftbrs,]
+z.ftbrs <- t(scale(t(exp.ftbrs))) # transform to z score
+z.pca <- prcomp(t(z.ftbrs), scale. = F, center = F); sig.ftbrs <- z.pca$x[,1, drop=F] # take first principal component as signature
+
+burden.df$FTBRS <- sig.ftbrs[match(burden.df$Sample, row.names(sig.ftbrs))]
+burden.sub <- subset(burden.df, Tissue=='Cancer' & MSI=='MSS') #limit to MMRp CRCs
+burden.other <- lmer(FTBRS ~ 1 + (1 | Patient), data=burden.sub)
+burden.lmer <- lmer(FTBRS ~ patEscape + (1 | Patient), data=burden.sub)
+p.lmer <- anova(burden.lmer, burden.other)$`Pr(>Chisq)`[2]
+ggplot(burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS',], aes(x=patEscape, y=FTBRS, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.2, height=0) +
+  theme_mypub() + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen', 'goldenrod','brown')) +
+  stat_compare_means(comparisons=list(c('No','Epigenetic'),c('Epigenetic','Yes'), c('No','Partial')),
+                     label.y = c(9.5, 8, 6.5)) +
+  annotate('text', x=1.5, y=12, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  labs(y='F-TBRS', x='Cancer escape')
+
+# TGBFBR2 expression
+gene <- 'TGFBR2'
+ensid <- unique(gene.table$Gene.stable.ID[gene.table$HGNC.symbol==gene])
+exp.tmp <- t(geneexp[ensid, ])
+
+burden.df$Gene.Exp <- exp.tmp[match(burden.df$Sample,row.names(exp.tmp)),]
+burden.sub <- subset(burden.df, Tissue=='Cancer' & MSI=='MSS')
+burden.other <- lmer(Gene.Exp ~ 1 + (1 | Patient), data=burden.sub)
+burden.lmer <- lmer(Gene.Exp ~ patEscape + (1 | Patient), data=burden.sub)
+p.lmer <- anova(burden.lmer, burden.other)$`Pr(>Chisq)`[2]
+ggplot(burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS',], aes(x=patEscape, y=Gene.Exp, fill=patEscape)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.2, height=0) +
+  theme_mypub() + guides(fill='none') +
+  scale_fill_manual(values=c('grey40','yellowgreen', 'goldenrod','brown')) +
+  stat_compare_means(comparisons=list(c('No','Yes'),c('Partial','Yes'),c('Epigenetic','Yes')),
+                     label.y=c(18.5,15.5, 17)) +
+  annotate('text', x=1.5, y=20.5, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  labs(y=paste0(gene, ' expression (VST)'), x='Cancer escape')
+

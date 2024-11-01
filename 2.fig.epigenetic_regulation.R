@@ -4,6 +4,7 @@ source('0.basics.R')
 expTable.master <- read.delim('RNA/All_EPICC_tpm.txt')
 vst.deseq <- readRDS('RNA/allgenes.vsd.ensembl_withC516adenoma.rds')
 geneexp <- as.data.frame(assay(vst.deseq))
+geneGroup.df <- readRDS('RNA/gene_clustering_and_id_conversion.rds')
 
 # SCAA of APGs ------------------------------------------------------------
 
@@ -124,6 +125,100 @@ ggplot(gene.df, aes(x=paste0(SCAA), y=Exp)) +
   scale_y_log10(breaks=c(6, 10, 16)) #+ facet_wrap(.~CN2) #uncomment to test neutral/non-neutral CN separately
 
 
+# Transcription factors and APG-SCAAloss ----------------------------------
+
+# binding sites overlapping recurrent APG SCAAloss
+tf.scaloss <- read.delim('ATAC/TFs/TF_peakoverlap_APG_recurscaloss.txt')
+tf.scaloss.sum <- as.data.frame(table(tf.scaloss$name, tf.scaloss$tf_name))
+tf.scaloss.sum$Freq <- 1*(tf.scaloss.sum$Freq>0)
+# summarise for each TF (i.e. if there's > 1 TF-APG binding combo, count only once)
+tf.scaloss.pertf <- aggregate(tf.scaloss.sum$Freq, by=list(tf.scaloss.sum$Var2), sum); names(tf.scaloss.pertf) <- c('tf_name','APG_count')
+tf.scaloss.pertf <- tf.scaloss.pertf[order(tf.scaloss.pertf$APG_count, decreasing = T),]
+tf.selected_recur <- tf.scaloss.pertf[tf.scaloss.pertf$APG_count>2,] #take ones binding >2 different APGs' promoters
+tf.scaloss.sum <- subset(tf.scaloss.sum, Var2 %in% tf.selected_recur$tf_name)
+tf.scaloss.sum$Var2 <- factor(tf.scaloss.sum$Var2, levels=tf.selected_recur$tf_name)
+tf.scaloss.sum$Var1 <- factor(tf.scaloss.sum$Var1, levels=c('ERAP2','NLRC5','HSPA4','NFYC','PSMA7','PSME3','NFYA','TAP2')) #gene order based on recurrence
+ggplot(tf.scaloss.sum, aes(x=Var1, y=Var2, fill=as.factor(Freq))) + geom_tile() +
+  theme_mypub() + theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1)) +
+  scale_fill_manual(values=c('white','darkgreen'), labels=c('','binding')) +
+  labs(y='TF',x='APG with recurr. SCAAloss',fill='')
+
+# binding sites overlapping (any) APG SCAAloss
+tf.scaloss <- read.delim('ATAC/TFs/TF_peakoverlap_APG_scaloss.txt')
+tf.scaloss.sum <- as.data.frame(table(tf.scaloss$name, tf.scaloss$tf_name))
+tf.scaloss.sum$Freq <- 1*(tf.scaloss.sum$Freq>0)
+tf.scaloss.pertf <- aggregate(tf.scaloss.sum$Freq, by=list(tf.scaloss.sum$Var2), sum); names(tf.scaloss.pertf) <- c('tf_name','APG_count')
+tf.scaloss.pertf <- tf.scaloss.pertf[order(tf.scaloss.pertf$APG_count, decreasing = T),]
+head(tf.scaloss.pertf, 20)
+tf.selected <- tf.scaloss.pertf[tf.scaloss.pertf$APG_count>=10,] # select those with >10 binders
+
+
+# Chromatin accessibility vs RNA expression -------------------------------
+
+# get CPM values for peaks in each gene's promoter region
+scaa <- readRDS('ATAC/analysis_results_raw.rds')
+cpm.prom.df <- scaa$cpm_baseline[scaa$peak_annotation@anno$annotation=='Promoter (<=1kb)',]
+cpm.prom.df$GeneID <- scaa$peak_annotation@anno$ENSEMBL[scaa$peak_annotation@anno$annotation=='Promoter (<=1kb)']
+
+# Test correlation in normal samples
+# take median expression value in normals
+geneexp.norm <- geneexp[,rna.df$Sample[rna.df$Tissue=='Normal']]
+norm.exp <- apply(geneexp.norm,1,median); names(norm.exp) <- row.names(geneexp.norm)
+# take cpm from "normal" column, take median if >1 peak in promoter region
+norm.cpm <- aggregate(cpm.prom.df$normal, by=list(cpm.prom.df$GeneID), median ); names(norm.cpm) <- c('GeneID','normal')
+norm.cpm$Exp <- norm.exp[match(norm.cpm$GeneID, names(norm.exp))]
+norm.cpm$Group <- geneGroup.df$Group[match(norm.cpm$GeneID, geneGroup.df$ensembl_gene_id)] # add gene group annotation
+
+ggplot(norm.cpm[!is.na(norm.cpm$Group),], aes(x=normal, y=Exp)) + 
+  geom_point(alpha=0.2) + theme_bw() + stat_cor(method='spearman') 
+ggplot(norm.cpm[!is.na(norm.cpm$Group) & norm.cpm$Group %in% c(4),], aes(x=normal, y=Exp)) + 
+  geom_point(alpha=0.2) + theme_bw() + stat_cor(method='spearman') 
+
+# Test correlation in tumour samples
+# take median expression of all biopsies from the same patient, and median of cpm values if >1 peak in promoter region
+cpm.total <- data.frame(matrix(vector(),ncol=4))
+for (pat in intersect(rna.df$Patient, gsub('.pure','',names(cpm.prom.df)) )){
+  cpm.tmp <- aggregate(cpm.prom.df[,paste0(pat,'.pure')], by=list(cpm.prom.df$GeneID),median)
+  names(cpm.tmp) <- c('GeneID','CPM'); cpm.tmp$Patient <- pat
+  pat.exp <- apply(geneexp[,rna.df$Sample[rna.df$Patient==pat & rna.df$Tissue=='Cancer'],drop=F],1,median)
+  names(pat.exp) <- row.names(geneexp)
+  cpm.tmp$Exp <- pat.exp[match(cpm.tmp$GeneID, names(pat.exp))]
+  cpm.total <- rbind(cpm.total, cpm.tmp)
+}
+cpm.total$Group <- geneGroup.df$Group[match(cpm.total$GeneID, geneGroup.df$ensembl_gene_id)]
+
+ggplot(cpm.total[!is.na(cpm.total$Group),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
+  stat_cor(method='spearman')
+ggplot(cpm.total[!is.na(cpm.total$Group),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
+  stat_cor(method='spearman') + facet_wrap(.~Patient)
+ggplot(cpm.total[!is.na(cpm.total$Group) & cpm.total$Group %in% c(4),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
+  stat_cor(method='spearman') + facet_wrap(.~Patient)
+
+# Test correlation by computing an R value for each gene separately
+cpm.prom.df <- scaa$cpm_baseline[scaa$peak_annotation@anno$annotation=='Promoter (<=1kb)',]
+cpm.prom.df <- cpm.prom.df[,grepl('pure',names(cpm.prom.df))]
+cpm.prom.df$GeneID <- scaa$peak_annotation@anno$ENSEMBL[scaa$peak_annotation@anno$annotation=='Promoter (<=1kb)']
+cpm.prom.df <- cpm.prom.df[!is.na(cpm.prom.df$GeneID),]
+
+geneexp.canc <- geneexp[,rna.df$Sample[(rna.df$Patient %in% gsub('.pure','',names(cpm.prom.df))) & rna.df$Tissue=='Cancer'],drop=F]
+rna.tmp <- rna.df[(rna.df$Sample %in% names(geneexp.canc)),]
+names(cpm.prom.df) <- gsub('.pure','',names(cpm.prom.df))
+
+cor.total <- data.frame(matrix(vector(),ncol=3)); names(cor.total) <- c('GeneID','Rho','p')
+for ( gene in intersect(cpm.prom.df$GeneID,row.names(geneexp.canc))){
+  rna.tmp$Exp <- as.numeric(geneexp.canc[gene,rna.tmp$Sample])
+  rna.perPatient <- aggregate(rna.tmp$Exp, by=list(rna.tmp$Patient), median); names(rna.perPatient) <- c('Patient','Exp')
+  rna.perPatient$CPM <- apply(cpm.prom.df[cpm.prom.df$GeneID==gene,rna.perPatient$Patient],2,median)
+  #shuffle labels as a negative control to test if R distribution is destroyed
+  #rna.perPatient$CPM <- sample(apply(cpm.prom.df[cpm.prom.df$GeneID==gene,rna.perPatient$Patient],2,median))
+  cc <- cor.test(~ Exp + -CPM, data=rna.perPatient, method='spearman')
+  cor.total[nrow(cor.total)+1,] <- c(gene, cc$estimate, cc$p.value)
+}
+cor.total[,2:3] <- apply(cor.total[,2:3],2,as.numeric)
+cor.total$Group <- geneGroup.df$Group[match(cor.total$GeneID, geneGroup.df$ensembl_gene_id)]
+
+ggplot(cor.total, aes(y=Rho, x='R')) + geom_violin() + theme_mypub() +
+  annotate('text', label=paste0('p=',t.test(cor.total$Rho, mu = 0)$p.value), y=0.75, x=0.75)
 
 # Phylogenetic signal and ATAC peaks --------------------------------------
 
@@ -204,7 +299,7 @@ ggplot(f.df) +
   labs(y='Odds ratio') + guides(fill='none', colour='none') +
   geom_point(data=f.df[f.df$P<0.05,], aes(x=as.numeric(as.factor(Mutation)), y=3), shape=8) +
   scale_x_continuous(breaks=c(1,2,3), labels=f.df$Mutation) + theme(axis.title.x = element_blank())
-
+print(f.df)
 
 # repeat the same for MMRp/d cancers only
 atac.muts.sub <- subset(atac.muts.total, (Neoantigen %in% c(neoIdentifier, nonneoIdentifier)) & !(Category %in% c('adenoma_only','private_adenoma')))

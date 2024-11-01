@@ -412,3 +412,173 @@ ggplot(vaf.cum.df, aes(x=invVAF,y=cumNeo)) +
   geom_line(aes(y=cumNonNeo)) +
   theme_mypub() + annotate('text', x=150, y=0.7, label=paste0('KS-test p=',round(ks$p.value,4))) +
   labs(x='1/VAF',y='Cumulative count')
+
+
+# Down-sampled dataset analysis -------------------------------------------
+
+# Down-sampled example tree for C543
+total.df <- read.delim('Subclonality/C543.total.extended.txt')
+total.df <- subset(total.df, MutType %in% c('SNV'))
+regs <- epicc.df$Sample[epicc.df$Patient=='C543']
+total.sc <- subset(total.df, Category %in% c('regional','private','shared_subclonal','other','private_adenoma'))
+total.cl <- subset(total.df, Category %in% c('truncal','truncal_full','adenoma_only'))
+# downsample to 25% of truncal mutations
+total.cl <- total.cl[sample(1:nrow(total.cl), size = round(nrow(total.cl)/4)),]; total.ds <- rbind(total.sc, total.cl)
+mut.data <- total.ds[,regs]; mut.data = mut.data %>% mutate(GL=0) # add germline root
+# generate and plot tree
+mut.phy <- as.phyDat(mut.data,type='USER',levels=c('0','1'))
+attr(mut.phy, 'id') <- total.ds$mutID
+mut.tree <- pratchet(mut.phy, k=100, maxit=1e6, trace=0) %>% ape::unroot() %>%
+  ape::root(out='GL', resolve.root=T) %>%
+  acctran(mut.phy)
+# plotting requires MLLPT from THeide: for installation follow https://github.com/T-Heide/MLLPT
+mut.tree %>% MLLPT:::remove_root_tip(out="GL") %>% 
+  MLLPT::plot_tree() 
+
+# Multivariable analysis on down-sampled datasets
+burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
+burden.df$MSI <- factor(burden.df$MSI, levels=c('MSS','MSI'))
+burden.df$Tissue <- relevel(as.factor(burden.df$Tissue), ref='Cancer')
+burden.df$Patient <- paste0('=',burden.df$Patient); burden.df$Patient <- relevel(as.factor(burden.df$Patient), ref='=C531')
+
+# carry out analysis for all datasets and record p values
+p_adenoma.all <- c()
+p_weak.all <- c()
+p_yes.all <- c()
+p_gland.all <- c()
+for (i in 1:50){
+  burden.new <- read.delim(paste0('Subclonality/Downsampling/Burden_downsampled.',i,'.txt'))
+  burden.new$PropBurden <- burden.new$SNVBurden/burden.new$TotalSNV
+  # overwrite proportional burden with the downsampled value
+  burden.df$PropBurden <- burden.new$PropBurden[match(burden.df$Sample, burden.new$Sample)]
+  all.test.mv <- betareg(PropBurden ~ SampleType + Tissue + Patient + Escape + Purity, data=burden.df)
+  s <- summary(all.test.mv)
+  p_adenoma.all <- c(p_adenoma.all,s$coefficients$mu['TissueAdenoma','Pr(>|z|)'])
+  p_weak.all <- c(p_weak.all, s$coefficients$mu['EscapeWeak','Pr(>|z|)'])
+  p_yes.all <- c(p_yes.all, s$coefficients$mu['EscapeYes','Pr(>|z|)'])
+  p_gland.all <- c(p_gland.all, s$coefficients$mu['SampleTypeGland','Pr(>|z|)'])
+  
+}
+
+p.all <- data.frame(p=c(p_adenoma.all, p_gland.all, p_weak.all, p_yes.all), variable=rep(c('Tissue=Adenoma','Type=Gland','Potential escape','Escape'),
+                                                                                         times=c(length(p_adenoma.all),length(p_gland.all),length(p_weak.all),length(p_yes.all))))
+p.all$variable <- factor(p.all$variable, levels=c('Type=Gland','Tissue=Adenoma','Potential escape','Escape'))
+p.signif <- as.data.frame(table(p.all$p<=0.05, p.all$variable))
+p.signif <- p.signif[p.signif$Var1=='TRUE',]
+# plot p values and number that is significant
+ggplot(p.all, aes(x=variable, y=p)) + geom_violin() + 
+  theme_mypub() + theme(axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)) +
+  geom_hline(yintercept = 0.05, linetype='dashed') +
+  annotate('text', x=1:4, y=1.05, label=paste0(p.signif$Freq,'/42'))
+
+
+# Normalised subclonal burden analysis on down-sampled datasets
+measures.files <- list.files('Subclonality/Subclonal_escapes/',pattern='NAmeasures.txt', full.names = T)
+# get original values for comparison
+measures.total <- read.delim('Subclonality/Subclonal_escape_normalised.deepWGSclose.txt')
+measures.total$Patient <- as.factor(measures.total$Patient)
+mutt.prop <- t.test(measures.total$PropBurden[measures.total$Mut=='mutation'], mu=1)
+measures.df <- read.delim(grep('C543',measures.files,value=T))
+measures.df <- subset(measures.df, Sample %in% sampleList); measures.df <- subset(measures.df, Sample!='C543_A1_G9')
+measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+c543.original <- measures.df$PropBurden[measures.df$Mut=='mutation']
+
+deep <- T; close <- T
+# carry out analysis for all datasets and record p values and values for C543
+p.all <- c()
+c543.all <- c()
+for (i in 1:50){
+  measures.total <- data.frame(matrix(vector(),ncol=12))
+  downsamp.df <- read.delim(paste0('Subclonality/Downsampling/Burden_downsampled.',i,'.txt'))
+  downsamp.df$PropBurden <- downsamp.df$SNVBurden/downsamp.df$TotalSNV
+  
+  samp <- 'C518'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  measures.df <- subset(measures.df, Region!='C')
+  if(close) measures.df <- subset(measures.df, Region!='C' & Region!='D') #limiting to close regions only
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList) #only deepWGS samples
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)] #overwrite proportional burden with downsampled value
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C524'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  measures.df$Mut[measures.df$Mut=='fs'] <- 'mutation'; measures.df$Mut[measures.df$Mut=='wt'] <- 'no mut'
+  if(close) measures.df <- subset(measures.df, Mut!='LOH')
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C536'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C537'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  measures.df <- subset(measures.df, Region!='A')
+  if(close) measures.df <- subset(measures.df, Region=='C')
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C543'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df <- subset(measures.df, Sample!='C543_A1_G9')
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C548'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df$Mut[measures.df$Mut=='mut'] <- 'no mut'; measures.df$Mut[measures.df$Mut=='extra mut' | measures.df$Mut=='higher impact'] <- 'mutation'
+  if(close)measures.df <- subset(measures.df, Region!='C' & Region!='D')
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C552'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df$Mut[measures.df$Mut=='mut'] <- 'no mut'; measures.df$Mut[measures.df$Mut=='extra mut'] <- 'mutation'
+  measures.df <- subset(measures.df, Region!='F')
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C554'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  if(close) measures.df <- subset(measures.df, Region=='B')
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  samp <- 'C559'
+  measures.df <- read.delim(grep(samp,measures.files,value=T))
+  measures.df$Mut[measures.df$Mut=='no LOH'] <- 'no mut'; measures.df$Mut[measures.df$Mut=='full LOH'] <- 'LOH';
+  if(close) measures.df <- subset(measures.df, Region=='A' | (Region == 'D' & !(Sample %in% c('C559_D1_G5','C559_D1_G9'))))
+  if(deep) measures.df <- subset(measures.df, Sample %in% sampleList)
+  measures.df$PropBurden <- downsamp.df$PropBurden[match(measures.df$Sample, downsamp.df$Sample)]
+  measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')] <- apply(measures.df[,c('SNVBurden','PropBurden','SNVBurden_sc','PropBurden_sc','imm_dNdS')],2,function(x) x/mean(x,na.rm=T))
+  measures.total <- rbind(measures.total, measures.df)
+  
+  mutt <- t.test(measures.total$PropBurden[measures.total$Mut=='mutation'], mu=1)
+  p.all <- c(p.all, mutt$p.value)
+  c543.all <- c(c543.all, measures.total[measures.total$Patient=='C543' & measures.total$Mut=='mutation','PropBurden'])
+}
+
+ggplot(data.frame(p=p.all), aes(y=p, x='')) + geom_violin() + theme_mypub() +
+  theme(axis.title.x = element_blank(), axis.ticks.x = element_blank()) +
+  geom_point(data=data.frame(p=mutt.prop$p.value), size=3, shape=17)
+
+ggplot(data.frame(norm=c543.all), aes(y=norm, x='')) + geom_violin() + theme_mypub() +
+  theme(axis.title.x = element_blank(), axis.ticks.x = element_blank()) +
+  geom_jitter(data=data.frame(norm=c543.original), width=0.2, colour='darkorange', height=0, size=3, shape=17) +
+  labs(y='Normalised proportional\nneoantigen burden in C543')

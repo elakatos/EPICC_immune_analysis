@@ -7,7 +7,7 @@ library(ggplot2); library(reshape2); library(ggpubr); library(gridExtra); librar
 require(RColorBrewer); require(scales); library(stringr); library(betareg)
 library(jtools); library(betareg); library(phytools); library(matrixStats);
 library(GenomicRanges); library(rtracklayer); library(readxl); library(tidyverse)
-library(lmerTest)
+library(lmerTest); library(phangorn)
 
 options(stringsAsFactors = F)
 setwd('~/EPICC/') # Change this folder depending on the location of the downloaded files
@@ -37,4 +37,5 @@ atac.df <- read.delim('ATAC/ListATAC.EPICC.txt')
 ip.samples.df <- read.delim('FFPE_samples/immunopanel_sample_key.txt')
 patientEsc.df <- read.delim('Immune_escape/EPICC_escape_perPatient.manual.txt')
 
+sampleList <- epicc.df$Sample[epicc.df$Type=='Deep']
 

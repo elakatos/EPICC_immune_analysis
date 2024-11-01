@@ -66,6 +66,27 @@ ggplot(ip.inf.sub, aes(y=per_epi_cell.PDL1plus, x=sample_type, fill=sample_type)
   guides(fill='none') + labs( y='PD-L1+ non-epi. cells [per epi cell]',x='Sample type')
 
 
+# Regression between burden and infiltrates -------------------------------
+
+ip.inf.df <- readRDS('FFPE_samples/cycif_summary_with_normal.rds')
+ip.inf.df$sample_type <- factor(ip.inf.df$sample_type, levels=c('Normal','Superficial','Invasive','Node'))
+ip.inf.sub <- subset(ip.inf.df, !is.na(patEscape) & sample_type!='Normal')
+burden.df <- read.delim('Burden/Burden_master_table.allsample.FFPE.txt')
+burden.df$SampleType <- factor(burden.df$SampleType, levels=c('superficial','invasive','node'))
+ip.inf.sub$PropBurden <- burden.df$PropBurden[match(ip.inf.sub$roi, burden.df$Sample)]
+
+mv.test <- lmer(PropBurden ~ sample_type + per_epi_cell.VISTAplus + per_epi_cell.Stromal_cells + fraction.PDL1plus_epithelial_cells + per_epi_cell.Cytotoxic_T_cell + per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus +per_epi_cell.CD68plus + per_epi_cell.CD45ROplus + per_epi_cell.CD163plus + per_epi_cell.PD1plus + (1 | PatientEPICC),
+                data = ip.inf.sub)
+
+plot_summs(mv.test, coefs=c('VISTA+ cells'='per_epi_cell.VISTAplus','Stromal cells'='per_epi_cell.Stromal_cells',
+                            'PD-L1+ epi cells'='fraction.PDL1plus_epithelial_cells','CTLs'='per_epi_cell.Cytotoxic_T_cell',
+                            'CTLA-4+ Tregs'='per_epi_cell.CD3plusCD4plusCTLA4plusCD45ROplusFOXP3plus',
+                            'PD1+ cells'='per_epi_cell.PD1plus','CD163+ cells'='per_epi_cell.CD163plus',
+                            'CD68+ cells'='per_epi_cell.CD68plus', 'CD45RO+ cells' = 'per_epi_cell.CD45ROplus'
+),
+colors=c('purple4')) +
+  theme_mypub() + theme(axis.title.y = element_blank())+ labs(x='Change in prop neoantigen burden')
+
 # Infiltrating lymphocytes (H&E) ------------------------------------------
 
 # Total Lymphocyte count

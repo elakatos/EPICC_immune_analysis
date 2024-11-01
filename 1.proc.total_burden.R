@@ -227,3 +227,33 @@ for (samp in samples){
   write.table(pat.muts, paste0('Subclonality/',samp,'.total.extended.txt'),
               sep='\t', row.names=F, quote=F)
 }
+
+
+# Create downsampled tables of burden -------------------------------------
+
+burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
+
+for (i in 1:1){
+  burden.new <- data.frame(matrix(vector(),ncol=8))
+  for (pat in unique(burden.df$Patient)){
+    total.df <- read.delim(paste0('Subclonality/',pat,'.total.extended.txt'))
+    total.df <- subset(total.df, MutType %in% c('SNV'))
+    regs <- burden.df$Sample[burden.df$Patient==pat]
+    total.sc <- subset(total.df, Category %in% c('regional','private','shared_subclonal','other','private_adenoma'))
+    total.cl <- subset(total.df, Category %in% c('truncal','truncal_full','adenoma_only'))
+    # downsample to 25% of truncal mutations
+    total.cl <- total.cl[sample(1:nrow(total.cl), size = round(nrow(total.cl)/4)),]
+    burden.tmp <- data.frame(Patient = pat,
+                             Sample = regs,
+                             TotalSNV.sc = as.numeric(colSums(total.sc[,regs])),
+                             SNVBurden.sc = as.numeric(colSums(total.sc[total.sc$Neoantigen %in% neoIdentifier,regs])),
+                             TotalSNV.cl = as.numeric(colSums(total.cl[,regs])),
+                             SNVBurden.cl = as.numeric(colSums(total.cl[total.cl$Neoantigen %in% neoIdentifier,regs])),
+                             TotalSNV = as.numeric(colSums(total.cl[,regs]) + colSums(total.sc[,regs])),
+                             SNVBurden = as.numeric(colSums(total.cl[total.cl$Neoantigen %in% neoIdentifier,regs]) + colSums(total.sc[total.sc$Neoantigen %in% neoIdentifier,regs]))
+    )
+    burden.new <- rbind(burden.new, burden.tmp)
+  }
+  #write.table(burden.new, file=paste0('EPICC/Subclonality/Downsampling/Burden_downsampled.',i,'.txt'), sep='\t', row.names=F, quote=F)
+}
+

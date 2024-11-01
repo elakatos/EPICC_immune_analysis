@@ -95,6 +95,7 @@ ggplot(f.df.total) +
   geom_hline(yintercept = 1, linetype='dashed') +
   labs(y='Odds ratio', x='Gene group', fill=paste0(muttype,'s'), colour=paste0(muttype,'s')) +
   geom_point(data=f.df.total[f.df.total$P<0.05,], aes(x=Xloc, y=1.6), shape=8)
+print(f.df.total)
 
 # MMRp / MMRd
 # Repeat above for MMRp/d samples separately
@@ -245,6 +246,7 @@ ggplot(f.df) +
   labs(y='Odds ratio') + guides(fill='none', colour='none') +
   geom_point(data=f.df[f.df$P<0.05,], aes(x=as.numeric(as.factor(Mutation)), y=4), shape=8) +
   scale_x_continuous(breaks=c(1,2,3), labels=f.df$Mutation) + theme(axis.title.x = element_blank())
+print(f.df)
 
 # Repeat for MMRp/d separately
 exp.muts.total <- subset(exp.muts.total, Patient!='C516') #exclude C516 that can overly dominate the data

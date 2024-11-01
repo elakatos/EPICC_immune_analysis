@@ -118,3 +118,64 @@ scaa.muts.total$Neoantigen <- ifelse(scaa.muts.total$Neoantigen=='','',
                                             ifelse(grepl('Non',scaa.muts.total$Neoantigen),'Both','SB Neo' )))
 write.table(scaa.muts.total, file='ATAC/SCAALoss_mutsPerSCAA_allcancers.txt', sep='\t',row.names=F, quote=F)
 
+
+
+# Transcription factor and APG-SCAAloss -----------------------------------
+
+# Function to read in bed file of transcription factor binding sites into GRanges
+read_bed_file = function(f) {
+  require(GenomicRanges)
+  
+  stopifnot(file.exists(f))
+  
+  fl = readr::read_tsv(f, col_names=FALSE, col_types = readr::cols(), n_max=2)
+  if (!suppressWarnings(is.na(as.numeric(fl[1,2])))) { # asssume no header
+    if (NROW(fl) == 0) return(NULL)
+    bed_data = readr::read_tsv(f, col_names = FALSE, col_types = "cii")
+  } else { # assume header
+    if (NROW(fl) == 1) return(NULL)
+    stopifnot(!suppressWarnings(is.na(as.numeric(fl[2,2])))) 
+    bed_data = readr::read_tsv(f, col_names = TRUE, col_types = "cii")
+  }
+  colnames(bed_data) = c("chr","start","end")
+  bed_data = as(bed_data, "GRanges")
+  return(bed_data)
+}
+
+# get Granges object for peaks associated with at least X SCAloss in APG
+apg.genes <- read.delim('Immune_escape/APG_list.txt')
+scaa <- readRDS('ATAC/analysis_results_raw.rds')
+scaa.ind.list <- c()
+scaa.df <- scaa$fc*scaa$sig #table only containing significant fold changes, 0 otherwise
+names(scaa.df) <- gsub('.pure','',names(scaa.df))
+for (gene in apg.genes$GeneName){
+  scaa.ind <- which(sapply(scaa$flanking_symbol, function(z) gene %in% unlist(z)))
+  #scaa.loss <- rowSums(scaa.df[scaa.ind,]< -1) > 1 # require loss to be present in >1 sample
+  scaa.loss <- rowSums(scaa.df[scaa.ind,]< -1) > 0 # require loss to be present in any sample
+  if (sum(scaa.loss)>0){ # only add if we detected at least one SCAAloss associated with that peak
+    scaa.ind.list <- c(scaa.ind.list, scaa.ind[scaa.loss])
+  }
+}
+peak_pos_scaloss <- scaa$peak_annotation@anno[scaa.ind.list]
+
+# get TF overlap with peaks
+bed_folder <- 'ATAC/TFs/motif_matches_v3.1_beds/'
+bed_files <- list.files(bed_folder, pattern='*.bed.gz')
+tf.scaloss <- data.frame(matrix(vector(),ncol=6))
+
+for (i in 1:length(bed_files)){
+  print(i)
+  tf_bind <- read_bed_file(paste0(bed_folder,bed_files[i]))
+  tf_dist <- as.data.frame(distanceToNearest(tf_bind-1000, peak_pos_scaloss-250))
+  tf_overlap <- tf_dist[tf_dist$distance<1000,] # if distance is less than 1000, TF binding site overlaps peak
+  tf_overlap$name <- peak_pos_scaloss$SYMBOL[tf_overlap$subjectHits]
+  tf_overlap$annotation <- peak_pos_scaloss$annotation[tf_overlap$subjectHits]
+  if (nrow(tf_overlap)>0){
+    tf_overlap$tf_name <- gsub('.bed.gz','',bed_files[i])
+    tf.scaloss <- rbind(tf.scaloss, tf_overlap)
+  }
+}
+# shorten name of TF
+tf.scaloss$tf_name <- sapply(tf.scaloss$tf_name, function(z) unlist(strsplit(z,'_'))[[3]])
+# saved as TF_peakoverlap_APG_recurscaloss.txt or TF_peakoverlap_APG_scaloss.txt
+
