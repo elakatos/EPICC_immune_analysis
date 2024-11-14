@@ -66,6 +66,20 @@ ggplot(ip.inf.sub, aes(y=per_epi_cell.PDL1plus, x=sample_type, fill=sample_type)
   guides(fill='none') + labs( y='PD-L1+ non-epi. cells [per epi cell]',x='Sample type')
 
 
+# Lymphocytes classified as Infiltrating Lymphocytes
+ip.inf2.df <- read.delim('FFPE_samples/cycif_itlr.csv', sep=',')
+ip.inf2.sub <- ip.inf2.df
+ip.inf2.sub$sample_type <- factor(ip.inf2.sub$sample_type, levels=c('Normal','Superficial','Invasive','Node'))
+
+ggplot(ip.inf2.sub, aes(y=ITLR, x=sample_type, fill=sample_type)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
+  theme_mypub() +
+  scale_fill_manual(values=setNames(c('skyblue', '#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
+  stat_compare_means(comparisons=list(c('Superficial','Invasive'),c('Superficial','Node'),c('Normal','Superficial'),
+                                      c('Normal','Invasive'),c('Normal','Node')), label.y = c(0.2, 0.35, 0.45, 0.5, 0.55)) +
+  guides(fill='none') +
+  labs(x='Sample type', y='Infiltrating tumour lymphocyte ratio')
+
 # Regression between burden and infiltrates -------------------------------
 
 ip.inf.df <- readRDS('FFPE_samples/cycif_summary_with_normal.rds')
@@ -137,7 +151,33 @@ ggplot(ip.inf.sub, aes(y=ITLR, x=sample_type, fill=sample_type)) +
   guides(fill='none') +
   labs(x='Sample type', y='Infiltrating tumour lymphocyte ratio')
 
+# Compare ITLR from CyCIF and H&E
+ip.inf2.df <- read.delim('FFPE_samples/cycif_itlr.csv', sep=',')
+ip.inf2.sub <- ip.inf2.df[ip.inf2.df$sample_type!='Normal',]
+ip.inf2.sub$Patient <- substr(ip.inf2.sub$roi, 1, 4)
 
+# since less samples are available, sample H&E to have comparable numbers to CyCIF
+id.df <- read.delim('FFPE_samples/sample_id_conversion.txt', row.names=1)
+id.sub <- id.df[id.df$cycif_ROI_name %in% ip.inf2.sub$roi,]
+
+ip.inf.sub <- ip.inf.sub[ip.inf.sub$SampleID %in% id.sub$matching_slide_for_classifier,]
+ggplot(ip.inf.sub, aes(y=ITLR, x=sample_type, fill=sample_type)) +
+  geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.1, height=0) +
+  theme_mypub() +
+  scale_fill_manual(values=setNames(c('#6d6d4e','plum2','darkorange4'),c('Superficial','Invasive','Node'))) +
+  stat_compare_means(comparisons=list(c('Superficial','Invasive'),c('Superficial','Node'),c('Node','Invasive')), label.y = c(0.2, 0.35, 0.4)) +
+  guides(fill='none') +
+  labs(x='Sample type', y='Infiltrating tumour lymphocyte ratio')
+
+ip.inf.sub$roi <- id.sub$cycif_ROI_name[match(ip.inf.sub$SampleID, id.sub$matching_slide_for_classifier)]
+ip.inf.match <- ip.inf.sub[,c('roi','patient','sample_type','ITLR')]
+names(ip.inf.match) <- c('roi','Patient','sample_type','ITLR'); ip.inf.match$Type <- 'H&E'
+ip.inf2.sub$Type <- 'CyCIF'; ip.inf.match <- rbind(ip.inf.match, ip.inf2.sub[,c('roi','Patient','sample_type','ITLR','Type')])
+
+ggplot(ip.inf.match, aes(x=Type, y=ITLR)) + geom_point() +
+  geom_line(aes(group=roi, colour=sample_type)) +
+  theme_mypub() + facet_wrap(.~sample_type)
+  
 # Distance to CTLs --------------------------------------------------------
 
 # Normal compared to tumour regions

@@ -7,7 +7,7 @@ library(ggplot2); library(reshape2); library(ggpubr); library(gridExtra); librar
 require(RColorBrewer); require(scales); library(stringr); library(betareg)
 library(jtools); library(betareg); library(phytools); library(matrixStats);
 library(GenomicRanges); library(rtracklayer); library(readxl); library(tidyverse)
-library(lmerTest); library(phangorn)
+library(lmerTest); library(phangorn); library('DESeq2')
 
 options(stringsAsFactors = F)
 setwd('~/EPICC/') # Change this folder depending on the location of the downloaded files

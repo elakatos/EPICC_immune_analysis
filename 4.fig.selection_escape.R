@@ -11,7 +11,7 @@ apg <- read.delim('Immune_escape/APG_list.txt')
 apgmut.master <- read.delim('Immune_escape/EPICC_APG_MUT_master_file.txt')
 
 # Plot expression of a given gene in wild-type and mutated biopsies
-gene <- 'RFXAP' # B2M or NLRC5 (or RFXAP)
+gene <- 'NLRC5' # B2M or NLRC5
 ensid <- apg$EnsID[apg$GeneName==gene]
 gene.muts.regions <- apgmut.master$Sample[apgmut.master[,gene]>0]
 gene.df <- epicc.df[epicc.df$MatchRNA=='Yes',c('Sample','Patient','Region','Type')]
@@ -28,9 +28,6 @@ ggplot(gene.df, aes(x=Mut, y=Exp)) +
   scale_colour_manual(values=c('darkblue','skyblue'), labels=c('deep WGS','low-pass WGS'))
 
 # Plot expression of the sum of all HLA type-I in biopsies mutated/wild-type for an APG
-#gene.df$HLAA <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000206503",gene.df$Sample])
-#gene.df$HLAB <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000234745",gene.df$Sample])
-#gene.df$HLAC <- as.numeric(expTable.master[expTable.master$GeneID=="ENSG00000204525",gene.df$Sample])
 gene.df$HLAA <- as.numeric(geneexp["ENSG00000206503",gene.df$Sample])
 gene.df$HLAB <- as.numeric(geneexp["ENSG00000234745",gene.df$Sample])
 gene.df$HLAC <- as.numeric(geneexp["ENSG00000204525",gene.df$Sample])
@@ -100,21 +97,27 @@ ggplot(burden.sub, aes(x=Tissue, y=TotalWGS, fill=Tissue)) +
 # Burden association with cancer-level escape -----------------------------
 
 burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
+burden.df$patEscape <- patientEsc.df$EscapeWithEpi[match(burden.df$Patient, patientEsc.df$Patient)] #add epigenetic escape in too
+burden.df$patEscape <- factor(burden.df$patEscape, levels=c('No','Epigenetic','Partial','Yes'))
 
 # Proportional neoantigen burden
+burden.sub <- subset(burden.df, Tissue=='Cancer' & MSI=='MSS')
+burden.other <- lmer(PropBurden ~ 1 + (1 | Patient), data=burden.sub)
+burden.lmer <- lmer(PropBurden ~ patEscape + (1 | Patient), data=burden.sub)
+summary(burden.lmer)
+p.lmer <- anova(burden.lmer, burden.other)$`Pr(>Chisq)`[2]
 ggplot(burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS',], aes(x=patEscape, y=SNVBurden/TotalSNV, fill=patEscape)) +
   geom_boxplot(outlier.shape = NA) + geom_jitter(width=0.2, height=0) +
   theme_mypub() + guides(fill='none') +
-  scale_fill_manual(values=c('grey40','goldenrod','brown')) +
-  stat_compare_means(comparisons=list(c('No','Yes'),c('Partial','Yes'),c('No','Partial')), label.y = c(0.635, 0.615, 0.6)) +
-  labs(y='Proportional neoantigen burden', x='Cancer escape')
-
-
+  scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown')) +
+  stat_compare_means(comparisons=list(c('No','Yes'),c('Epigenetic','Partial'),c('Epigenetic','Yes')), label.y = c(0.65, 0.6, 0.625)) +
+  labs(y='Proportional neoantigen burden', x='Cancer escape') +
+  annotate('text',x=1.5, y=0.7, label=paste0('p(fixed effect)=',scientific(p.lmer,2)))
 
 
 # Immune dNdS with confidence intervals
 burden.df <- subset(burden.df, !is.na(imm_dNdS) & imm_dNdS<Inf)
-burden.sub <- burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS',]
+burden.sub <- burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS' & burden.df$patEscape!='Epigenetic',]
 median.imm <- aggregate(burden.sub$imm_dNdS, by=list(burden.sub$patEscape), function(x) median(x, na.rm=T))
 # note that coord_cartesian omits the top of some large CIs but does not affect test results
 ggplot(burden.sub, aes(x=patEscape, y=imm_dNdS, colour=patEscape)) +

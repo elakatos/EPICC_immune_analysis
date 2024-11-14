@@ -212,6 +212,7 @@ for (i in 1:50){
                      P=c(f.all$p.value,f.cl$p.value, f.sc$p.value))
   clonal.OR <- c(clonal.OR, f.df$P[grepl('Clonal',f.df$Mutation)])
 }
+table(clonal.OR<0.05)
 
 # Mutation RNA depletion and Neo co-occurrence -------------------------------
 
