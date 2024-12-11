@@ -46,7 +46,7 @@ burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
 # subset to only take into account patients who have an adenoma
 burden.sub <- subset(burden.df, Patient %in% adenomaList)
 # optional: filter out C530, as its adenomas are of low quality
- burden.sub <- subset(burden.sub, !(Patient %in% c('C530')))
+# burden.sub <- subset(burden.sub, !(Patient %in% c('C530')))
 burden.other <- lmer(PropBurden ~ 1 + (1 | Patient), data=burden.sub)
 burden.lmer <- lmer(PropBurden ~ Tissue + (1 | Patient), data=burden.sub)
 summary(burden.lmer)
