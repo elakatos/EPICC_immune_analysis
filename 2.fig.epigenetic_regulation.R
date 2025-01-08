@@ -189,10 +189,13 @@ cpm.total$Group <- geneGroup.df$Group[match(cpm.total$GeneID, geneGroup.df$ensem
 
 ggplot(cpm.total[!is.na(cpm.total$Group),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
   stat_cor(method='spearman')
+ggplot(cpm.total[!is.na(cpm.total$Group) & cpm.total$Group %in% c(4),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
+  stat_cor(method='spearman')
 ggplot(cpm.total[!is.na(cpm.total$Group),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
   stat_cor(method='spearman') + facet_wrap(.~Patient)
 ggplot(cpm.total[!is.na(cpm.total$Group) & cpm.total$Group %in% c(4),], aes(x=CPM, y=Exp)) + geom_point(alpha=0.2) + theme_bw() +
   stat_cor(method='spearman') + facet_wrap(.~Patient)
+
 
 # Test correlation by computing an R value for each gene separately
 cpm.prom.df <- scaa$cpm_baseline[scaa$peak_annotation@anno$annotation=='Promoter (<=1kb)',]
@@ -209,8 +212,8 @@ for ( gene in intersect(cpm.prom.df$GeneID,row.names(geneexp.canc))){
   rna.tmp$Exp <- as.numeric(geneexp.canc[gene,rna.tmp$Sample])
   rna.perPatient <- aggregate(rna.tmp$Exp, by=list(rna.tmp$Patient), median); names(rna.perPatient) <- c('Patient','Exp')
   rna.perPatient$CPM <- apply(cpm.prom.df[cpm.prom.df$GeneID==gene,rna.perPatient$Patient],2,median)
-  #shuffle labels as a negative control to test if R distribution is destroyed
-  #rna.perPatient$CPM <- sample(apply(cpm.prom.df[cpm.prom.df$GeneID==gene,rna.perPatient$Patient],2,median))
+  #uncomment next line to shuffle labels as a negative control to test if R distribution is destroyed
+  rna.perPatient$CPM <- sample(apply(cpm.prom.df[cpm.prom.df$GeneID==gene,rna.perPatient$Patient],2,median))
   cc <- cor.test(~ Exp + -CPM, data=rna.perPatient, method='spearman')
   cor.total[nrow(cor.total)+1,] <- c(gene, cc$estimate, cc$p.value)
 }
@@ -218,7 +221,10 @@ cor.total[,2:3] <- apply(cor.total[,2:3],2,as.numeric)
 cor.total$Group <- geneGroup.df$Group[match(cor.total$GeneID, geneGroup.df$ensembl_gene_id)]
 
 ggplot(cor.total, aes(y=Rho, x='R')) + geom_violin() + theme_mypub() +
-  annotate('text', label=paste0('p=',t.test(cor.total$Rho, mu = 0)$p.value), y=0.75, x=0.75)
+  annotate('text', label=paste0('p(mean=0) = ',scientific(t.test(cor.total$Rho, mu = 0)$p.value,3)), y=0.85, x=0.75) +
+  geom_hline(yintercept = 0, linetype='dashed', colour='grey50') +
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank()) +
+  labs(y='Access.-expr. correlation coeff. [shuffled]') + scale_y_continuous(limit=c(-0.65,0.9), breaks=c(-0.4, 0, 0.4, 0.8))
 
 # Phylogenetic signal and ATAC peaks --------------------------------------
 
