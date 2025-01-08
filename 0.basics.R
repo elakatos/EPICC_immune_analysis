@@ -10,7 +10,7 @@ library(GenomicRanges); library(rtracklayer); library(readxl); library(tidyverse
 library(lmerTest); library(phangorn); library('DESeq2')
 
 options(stringsAsFactors = F)
-setwd('EPICC_example/') # Change this folder depending on the location of the downloaded files
+setwd('~/EPICC_immune_analysis/EPICC_example/') # Change this folder depending on the location of the downloaded files
 
 theme_mypub <- function(base_size = 14,
                         base_family = ""){
