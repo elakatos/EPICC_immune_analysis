@@ -179,3 +179,93 @@ for (i in 1:length(bed_files)){
 tf.scaloss$tf_name <- sapply(tf.scaloss$tf_name, function(z) unlist(strsplit(z,'_'))[[3]])
 # saved as TF_peakoverlap_APG_recurscaloss.txt or TF_peakoverlap_APG_scaloss.txt
 
+
+# TF binding in general vs APG-SCAAloss loci ------------------------------
+
+# All predicted TF binding sites vs APG-SCAAloss binding, higlighting TFs we identified
+bed_folder <- 'ATAC/TFs/motif_matches_v3.1_beds/'
+bed_files <- list.files(bed_folder, pattern='*.bed.gz')
+
+binding_site_count <- data.frame(matrix(vector(), ncol=2))
+names(binding_site_count) <- c('count','tf_name')
+for (i in 1:length(bed_files)){
+  print(i)
+  tf_bind <- read_bed_file(paste0(bed_folder,bed_files[i]))
+  binding_site_count[nrow(binding_site_count)+1,] <- c(length(tf_bind), gsub('.bed.gz','',bed_files[i]))
+}
+binding_site_count$tf_name <- sapply(binding_site_count$tf_name, function(z) unlist(strsplit(z,'_'))[[3]])
+binding_site_count$count <- as.numeric(binding_site_count$count)
+
+# Annotate with count of binding sites overlapping (recurr) APG-SCAAloss peaks
+tf.scaloss <- read.delim('ATAC/TFs/TF_peakoverlap_APG_recurscaloss.txt')
+tf.scaloss.sum <- as.data.frame(table(tf.scaloss$name, tf.scaloss$tf_name))
+tf.scaloss.pertf <- aggregate(tf.scaloss.sum$Freq, by=list(tf.scaloss.sum$Var2), sum); names(tf.scaloss.pertf) <- c('tf_name','APG_count')
+tf.scaloss.pertf <- tf.scaloss.pertf[order(tf.scaloss.pertf$APG_count, decreasing = T),]
+
+binding_site_count$apgscaa_bind <- tf.scaloss.pertf$APG_count[match(binding_site_count$tf_name, tf.scaloss.pertf$tf_name)]
+binding_site_count$apgscaa_bind[is.na(binding_site_count$apgscaa_bind)] <- 0
+
+# Annotate with number of unique APGs affected by these sites
+tf.scaloss.sum$Freq <- 1*(tf.scaloss.sum$Freq>0) # summarise for each TF
+tf.scaloss.pertf <- aggregate(tf.scaloss.sum$Freq, by=list(tf.scaloss.sum$Var2), sum); names(tf.scaloss.pertf) <- c('tf_name','APG_count')
+binding_site_count$apgs_affected <- tf.scaloss.pertf$APG_count[match(binding_site_count$tf_name, tf.scaloss.pertf$tf_name)]
+binding_site_count$apgs_affected[is.na(binding_site_count$apgs_affected)] <- 0
+tf.selected_recur <- tf.scaloss.pertf[tf.scaloss.pertf$APG_count>2,] #take ones binding >2 different APGs' promoters
+binding_site_count$in_recurr <- binding_site_count$tf_name %in% tf.selected_recur$tf_name
+ggplot(binding_site_count, aes(x=count, y=apgscaa_bind, colour=in_recurr, alpha=in_recurr)) +
+  geom_point(size=2) + scale_x_log10() +
+  scale_colour_manual(values=setNames(c('grey30','darkgreen'),c('FALSE','TRUE'))) +
+  scale_alpha_manual(values=c(0.25, 1)) +
+  theme_mypub() +
+  guides(colour='none', alpha='none') + labs(x='# of binding sites', y='# of sites in APG SCAAloss prom.') +
+  geom_text(data = subset(binding_site_count, in_recurr ),
+            aes(label = tf_name), color = "darkgreen", nudge_x = -0.25, nudge_y = 1, size=3)
+
+# Test the two groups (in_recurr and not) and their APG-SCAAloss binding sites vs other sites
+apg_bind.sum <- aggregate(binding_site_count$apgscaa_bind, by=list(binding_site_count$in_recurr), sum)
+names(apg_bind.sum) <- c('APG_SCAA_TF', 'apgscaa_bind')
+apg_bind.sum$bind <- aggregate(binding_site_count$count, by=list(binding_site_count$in_recurr), sum)$x
+apg_bind.sum$bind <- apg_bind.sum$bind - apg_bind.sum$apgscaa_bind
+apg_bind.sum
+fisher.test(apg_bind.sum[,2:3], alternative = 'less')
+
+# Annotate with binding site count in SCAAloss promoters (any gene)
+scaa <- readRDS('ATAC/analysis_results_raw.rds')
+scaa.df <- scaa$fc*scaa$sig #table only containing significant fold changes, 0 otherwise
+names(scaa.df) <- gsub('.pure','',names(scaa.df))
+scaa.loss.ind <- which(rowSums(scaa.df< -1) > 0) # all SCAA losses regardless of location
+peak_pos_lossprom <- subset(scaa$peak_annotation@anno[scaa.loss.ind], grepl('Promoter',annotation))
+
+lossprom_binding_site_count <- data.frame(matrix(vector(), ncol=2))
+names(lossprom_binding_site_count) <- c('count','tf_name')
+for (i in 1:length(bed_files)){
+  print(i)
+  tf_bind <- read_bed_file(paste0(bed_folder,bed_files[i]))
+  tf_dist <- as.data.frame(distanceToNearest(tf_bind-1000, peak_pos_lossprom-250))
+  tf_overlap <- tf_dist[tf_dist$distance<1000,] # if distance is less than 1000, TF binding site overlaps peak
+  lossprom_binding_site_count[nrow(lossprom_binding_site_count)+1,] <- c(nrow(tf_overlap), gsub('.bed.gz','',bed_files[i]))
+}
+lossprom_binding_site_count$tf_name <- sapply(lossprom_binding_site_count$tf_name, function(z) unlist(strsplit(z,'_'))[[3]])
+lossprom_binding_site_count$count <- as.numeric(lossprom_binding_site_count$count)
+
+binding_site_count$promscaa_bind <- lossprom_binding_site_count$count[match(binding_site_count$tf_name, lossprom_binding_site_count$tf_name)]
+ggplot(binding_site_count, aes(x=count, y=promscaa_bind, colour=in_recurr, alpha=in_recurr)) +
+  geom_point(size=2) + scale_x_log10() + scale_y_log10() +
+  scale_colour_manual(values=setNames(c('grey30','darkgreen'),c('FALSE','TRUE'))) +
+  scale_alpha_manual(values=c(0.25, 1)) +
+  theme_mypub() +
+  guides(colour='none', alpha='none') + labs(x='# of binding sites', y='# of sites in SCAAloss prom.') +
+  geom_text(data = subset(binding_site_count, in_recurr ),
+            aes(label = tf_name), color = "darkgreen", nudge_x = -0.2, nudge_y = 0.2, size=3)
+
+# Test the two groups (in_recurr and not) and their APG-SCAAloss binding sites vs other promoter loss sites sites
+apg_bind.sum <- aggregate(binding_site_count$apgscaa_bind, by=list(binding_site_count$in_recurr), sum)
+names(apg_bind.sum) <- c('APG_SCAA_TF', 'apgscaa_bind')
+apg_bind.sum$bind <- aggregate(binding_site_count$promscaa_bind, by=list(binding_site_count$in_recurr), sum)$x
+apg_bind.sum$bind <- apg_bind.sum$bind - apg_bind.sum$apgscaa_bind
+apg_bind.sum
+fisher.test(apg_bind.sum[,2:3], alternative = 'less')
+
+# Highlight those with enough binding sites overlapping with APG-SCAAloss peaks
+bind_tfs <- subset(binding_site_count, apgscaa_bind>=3)
+bind_tfs$apgs_affected_names <- sapply(bind_tfs$tf_name, function(tf)  paste0(tf.scaloss.sum[tf.scaloss.sum$Var2==tf & tf.scaloss.sum$Freq>0,'Var1'], collapse=';'))
