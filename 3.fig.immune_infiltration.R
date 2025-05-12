@@ -49,7 +49,7 @@ ggplot(ip.inf.sub, aes(y=fraction.PDL1plus_epithelial_cells, x=sample_type, fill
   stat_compare_means(comparisons=list(c('Superficial','Invasive'),c('Superficial','Node'),c('Node','Invasive')),
                      label.y=c(0.05, 0.07, 0.09)) +
   scale_fill_manual(values=setNames(c('skyblue','#6d6d4e','plum2','darkorange4'),c('Normal','Superficial','Invasive','Node'))) +
-  annotate('text', x=1.5, y=0.11, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  #annotate('text', x=1.5, y=0.11, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   guides(fill='none') + labs( y='Fraction of PD-L1+ epi. cells',x='Sample type')
 
 # Other PD-L1+ cells across regions

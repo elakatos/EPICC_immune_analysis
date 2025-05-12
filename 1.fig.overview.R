@@ -151,3 +151,39 @@ ggplot(ip.burden.df) + theme_mypub() +
   theme(axis.title = element_blank(), axis.ticks.x=element_blank(), axis.text.x = element_blank())
 
 
+# Proportional burden vs immune dNdS --------------------------------------
+
+# In FF-WGS samples, faceted by MMRp/d status
+burden.df <- read.delim('Burden/Burden_master_table.allsample.txt')
+burden.df$patEscape <- patientEsc.df$EscapeWithEpi[match(burden.df$Patient, patientEsc.df$Patient)]
+burden.df$patEscape <- factor(burden.df$patEscape, levels=c('No','Epigenetic','Partial','Yes'))
+
+burden.sub <- subset(burden.df, !is.na(imm_dNdS) & imm_dNdS<Inf)
+ggplot(burden.sub, aes(x=PropBurden, y=imm_dNdS, colour=patEscape)) +
+  geom_hline(yintercept = 1, colour='grey50', linetype='dashed') +
+  geom_point(size=2, aes(shape=Tissue)) +
+  scale_shape_manual(values=c(17,16)) +
+  scale_colour_manual(values=c('grey40','yellowgreen','goldenrod','brown')) +
+  geom_linerange(aes(ymin=imm_lowci,ymax=imm_highci, group=Sample), alpha=0.5) +
+  theme_mypub() + stat_cor(label.x.npc = 0.525, label.y.npc=0.35) +
+  coord_cartesian(ylim=c(0,5)) + # comment out to see full CIs
+  facet_wrap(.~MSI) + labs(x='Proportional neoantigen burden',y='Immune dNdS', colour='Cancer\nescape') +
+  theme(strip.background = element_blank())
+
+
+# In FFPE-PS samples
+burden.df <- read.delim('Burden/Burden_master_table.allsample.FFPE.txt')
+burden.df$patEscape <- patientEsc.df$EscapeWithEpi[match(burden.df$PatientEPICC, patientEsc.df$Patient)]
+burden.df$patEscape <- factor(burden.df$patEscape, levels=c('No','Epigenetic','Partial','Yes'))
+
+burden.sub <- subset(burden.df, !is.na(imm_dnds) & imm_dnds<Inf)
+ggplot(burden.sub, aes(x=PropBurden, y=imm_dnds, colour=patEscape)) +
+  geom_hline(yintercept = 1, colour='grey50', linetype='dashed') +
+  geom_point(size=2, aes(shape=SampleType)) +
+  scale_shape_manual(values=c(18,8,15)) +
+  scale_colour_manual(values=c('grey40','yellowgreen', 'goldenrod','brown')) +
+  geom_linerange(aes(ymin=imm_lowci,ymax=imm_highci, group=Sample), alpha=0.5) +
+  theme_mypub() + stat_cor() +
+  coord_cartesian(ylim=c(0,5)) +
+  labs(x='Proportional neoantigen burden',y='Immune dNdS', colour='Cancer\nescape') +
+  theme(strip.background = element_blank())

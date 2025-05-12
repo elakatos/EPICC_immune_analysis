@@ -274,7 +274,7 @@ ggplot(measures.total[measures.total$Mut=='mutation',], aes(y=PropBurden,x=Mut))
   theme_mypub() + theme(axis.title.x=element_blank()) +
   geom_hline(yintercept = 1, linetype='dashed') +
   labs(y='Normalised proportional \nneoantigen burden') +
-  annotate('text', y=1.15, x=1, label=paste0('t-test p=',scientific(mutt.prop$p.value,digits=3))) +
+  #annotate('text', y=1.15, x=1, label=paste0('t-test p=',scientific(mutt.prop$p.value,digits=3))) +
   scale_colour_brewer(palette='Set1')
 
 # Normalised immune dNdS in subclonally escaped regions, with t-test comparing to mu=1

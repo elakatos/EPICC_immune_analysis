@@ -28,7 +28,7 @@ ggplot(exp.lambda.df, aes(x=Patient, y=Name, fill=-log10(LamPval))) +
 
 # Gene group and Neo co-occurrence ----------------------------------------
 
-muttype <- 'SNV' # choose between SNV/FS
+muttype <- 'FS' # choose between SNV/FS
 neoIdentifier <- c('SBRecopo Neo', 'SBRP Neo','SB Neo')
 nonneoIdentifier <- c('Non-Neo')
 mutTable.total <- read.delim('Subclonality/NA_nonNA_allcancers.txt')

@@ -11,7 +11,7 @@ apg <- read.delim('Immune_escape/APG_list.txt')
 apgmut.master <- read.delim('Immune_escape/EPICC_APG_MUT_master_file.txt')
 
 # Plot expression of a given gene in wild-type and mutated biopsies
-gene <- 'NLRC5' # B2M or NLRC5
+gene <- 'B2M' # B2M or NLRC5
 ensid <- apg$EnsID[apg$GeneName==gene]
 gene.muts.regions <- apgmut.master$Sample[apgmut.master[,gene]>0]
 gene.df <- epicc.df[epicc.df$MatchRNA=='Yes',c('Sample','Patient','Region','Type')]
@@ -127,7 +127,7 @@ ggplot(burden.sub, aes(x=patEscape, y=imm_dNdS, colour=patEscape)) +
   theme_mypub() + guides(colour='none') +
   scale_colour_manual(values=c('grey40','goldenrod','brown')) +
   labs(y='Immune dNdS', x='Cancer escape') +
-  coord_cartesian(ylim=c(0,5)) +
+ # coord_cartesian(ylim=c(0,5)) +
   geom_crossbar(data=median.imm, aes(x = Group.1, colour=Group.1, y=x, ymin = x, ymax = x), width = 0.5) +
   stat_compare_means(comparisons=list(c('No','Yes'),c('Partial','Yes'),c('No','Partial')), label.y=c(4.25, 3.75, 3.25))
 
@@ -255,7 +255,7 @@ ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.PD1plus, fill=patEscape)) +
   labs(y='PD-1+ cells [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
   scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown'))  +
   stat_compare_means(comparisons=list(c('No','Partial'),c('Partial','Yes'),c('No','Yes')), label.y = c(0.06,0.075, 0.09)) +
-  annotate('text', x=1.5, y=0.11, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  #annotate('text', x=1.5, y=0.11, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
 
 # VISTA+ cells
@@ -269,8 +269,8 @@ ggplot(ip.inf.sub, aes(x=patEscape, y=per_epi_cell.VISTAplus, fill=patEscape)) +
   labs(y='VISTA+ cells [per epi cell]', fill='Immune\nescape', x='Cancer escape') + guides(fill='none') +
   scale_fill_manual(values=c('grey40','yellowgreen','goldenrod','brown'))  +
   stat_compare_means(comparisons=list(c('No','Partial'),c('Partial','Yes'),c('Epi','Partial')), label.y = c(0.04,0.06, 0.08)) +
-  coord_cartesian(ylim=c(0, 0.25)) + # comment out to see full results
-  annotate('text', x=1.5, y=0.25, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
+  #coord_cartesian(ylim=c(0, 0.25)) + # comment out to see full results
+  #annotate('text', x=1.5, y=0.25, label=paste0('p(fixed effect)=',scientific(p.lmer,2))) +
   scale_x_discrete(labels=c('No','Epigenetic','Partial gen.','Genetic'))
 
 # Stromal cells
@@ -392,7 +392,7 @@ ggplot(burden.df[burden.df$Tissue=='Cancer' & burden.df$MSI=='MSS',], aes(x=patE
 
 # TGBFBR2 expression
 gene <- 'TGFBR2'
-ensid <- unique(gene.table$Gene.stable.ID[gene.table$HGNC.symbol==gene])
+ensid <- 'ENSG00000163513'
 exp.tmp <- t(geneexp[ensid, ])
 
 burden.df$Gene.Exp <- exp.tmp[match(burden.df$Sample,row.names(exp.tmp)),]
